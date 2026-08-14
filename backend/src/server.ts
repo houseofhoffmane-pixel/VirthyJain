@@ -100,9 +100,11 @@ export async function start() {
   return app;
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
-  start().catch((err) => {
-    console.error(err);
-    process.exit(1);
-  });
-}
+// Start on load. LiteSpeed/Passenger-style hosts (Hostinger) load this file
+// with require()/import and expect the server to begin listening as a side
+// effect — they do NOT run it as `node dist/server.js` — so we must not gate
+// startup on "is this the directly-run entry". Nothing else imports this file.
+start().catch((err) => {
+  console.error(err);
+  process.exit(1);
+});

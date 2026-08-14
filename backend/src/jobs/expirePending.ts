@@ -26,9 +26,18 @@ export async function expirePending(): Promise<number> {
   return rows.length;
 }
 
+// Run directly: `npm run expire`. No top-level await — that would make this
+// module (and anything importing it, including the server entry) impossible to
+// load via require() on LiteSpeed/Passenger hosts.
 if (import.meta.url === `file://${process.argv[1]}`) {
-  const { closePool } = await import('../lib/db.js');
-  const n = await expirePending();
-  console.log(`Expired ${n} pending booking(s).`);
-  await closePool();
+  const run = async () => {
+    const { closePool } = await import('../lib/db.js');
+    const n = await expirePending();
+    console.log(`Expired ${n} pending booking(s).`);
+    await closePool();
+  };
+  run().catch((e) => {
+    console.error(e);
+    process.exit(1);
+  });
 }
