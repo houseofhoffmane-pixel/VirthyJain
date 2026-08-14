@@ -1,10 +1,12 @@
 {
   "name": "virthy-booking",
   "version": "2.0.0",
-  "description": "Simple booking backend for Virthy Jain physiotherapy (Express + MySQL)",
+  "description": "Booking backend for Virthy Jain physiotherapy (Express + MySQL)",
+  "main": "server.js",
   "engines": { "node": ">=18" },
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "build": "echo 'No build step required'"
   },
   "dependencies": {
     "dotenv": "^16.4.5",

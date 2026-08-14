@@ -13,7 +13,7 @@ Hostinger runs (`server.js`) **is** the app.
 ## Deploy on Hostinger
 1. **Databases → create a MySQL database** and note the name, user, password, host.
 2. In the Node app **Settings**:
-   - Root directory: `backend`
+   - Root directory: *(leave blank / repo root)* — the app lives at the root.
    - Entry file: `server.js`
    - Build command: *(none)* — there's no build step.
 3. **Environment variables** — see `.env.example`. Minimum to run:
