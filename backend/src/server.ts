@@ -58,15 +58,18 @@ export async function buildServer() {
 }
 
 // Boot when run directly.
-if (import.meta.url === `file://${process.argv[1]}`) {
-  // Apply DB migrations on boot (idempotent). Set SKIP_MIGRATE_ON_BOOT=true to
-  // disable if you prefer a separate release step. If the DB is unreachable
-  // this throws and the deploy fails loudly rather than serving 500s.
+/**
+ * Full boot: migrate (idempotent), optional one-time seed, then listen.
+ * Exported so a plain `server.js` entry file can start the app on hosts that
+ * expect one, and called directly when this file itself is the entry point.
+ */
+export async function start() {
+  // Apply DB migrations on boot (idempotent). SKIP_MIGRATE_ON_BOOT=true opts out.
   if (process.env.SKIP_MIGRATE_ON_BOOT !== 'true') {
     await migrate();
   }
-  // One-time seeding on the host: set SEED_ON_BOOT=true for a single deploy,
-  // then remove it. Non-destructive, so leaving it on won't clobber edits.
+  // One-time seeding: set SEED_ON_BOOT=true for a single deploy, then remove it.
+  // Non-destructive, so leaving it on won't clobber admin edits.
   if (process.env.SEED_ON_BOOT === 'true') {
     const { seedInitialData } = await import('./lib/seed.js');
     await seedInitialData();
@@ -77,8 +80,16 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   app.log.info(`Virthy booking backend on :${config.port} (${config.env})`);
 
   // In-process safety net for expiring pending holds every 5 minutes.
-  // (A cron running `npm run expire` is the primary mechanism in production.)
   setInterval(() => {
     expirePending().catch((e) => app.log.error(e));
   }, 5 * 60_000).unref();
+
+  return app;
+}
+
+if (import.meta.url === `file://${process.argv[1]}`) {
+  start().catch((err) => {
+    console.error(err);
+    process.exit(1);
+  });
 }

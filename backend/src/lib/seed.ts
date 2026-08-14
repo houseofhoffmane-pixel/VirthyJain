@@ -83,3 +83,18 @@ export async function seedInitialData(): Promise<void> {
     client.release();
   }
 }
+
+// Run directly: `npm run seed` (applies migrations first, then seeds).
+if (import.meta.url === `file://${process.argv[1]}`) {
+  const run = async () => {
+    const { migrate } = await import('./migrate.js');
+    await migrate();
+    await seedInitialData();
+    await pool.end();
+    console.log('Seed complete: 4 services, 3 format templates (Mon–Fri), defaults.');
+  };
+  run().catch((e) => {
+    console.error(e);
+    process.exit(1);
+  });
+}

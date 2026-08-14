@@ -5,35 +5,31 @@
   "type": "module",
   "engines": { "node": ">=20" },
   "scripts": {
-    "dev": "tsx watch src/server.ts",
-    "start": "node dist/server.js",
     "build": "tsc -p tsconfig.json",
-    "migrate": "tsx src/lib/migrate.ts",
-    "seed": "tsx seed/seed.ts",
-    "expire": "tsx src/jobs/expirePending.ts",
-    "hash": "tsx src/lib/hashPassword.ts",
-    "test": "vitest run"
+    "postinstall": "tsc -p tsconfig.json",
+    "start": "node dist/server.js",
+    "dev": "npm run build && node dist/server.js",
+    "migrate": "node dist/lib/migrate.js",
+    "seed": "node dist/lib/seed.js",
+    "expire": "node dist/jobs/expirePending.js",
+    "hash": "node dist/lib/hashPassword.js"
   },
   "dependencies": {
     "@fastify/cookie": "^9.3.1",
     "@fastify/formbody": "^7.4.0",
     "@fastify/rate-limit": "^9.1.0",
+    "@types/bcryptjs": "^2.4.6",
+    "@types/luxon": "^3.4.2",
+    "@types/node": "^20.14.10",
+    "@types/nodemailer": "^6.4.15",
+    "@types/pg": "^8.11.6",
     "bcryptjs": "^2.4.3",
     "dotenv": "^16.4.5",
     "fastify": "^4.28.1",
     "luxon": "^3.5.0",
     "nodemailer": "^6.9.14",
     "pg": "^8.12.0",
-    "zod": "^3.23.8"
-  },
-  "devDependencies": {
-    "@types/bcryptjs": "^2.4.6",
-    "@types/luxon": "^3.4.2",
-    "@types/node": "^20.14.10",
-    "@types/nodemailer": "^6.4.15",
-    "@types/pg": "^8.11.6",
-    "tsx": "^4.16.2",
     "typescript": "^5.5.3",
-    "vitest": "^2.0.3"
+    "zod": "^3.23.8"
   }
 }
