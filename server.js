@@ -5,6 +5,8 @@
 
 require('dotenv').config();
 const crypto = require('crypto');
+const path = require('path');
+const fs = require('fs');
 const express = require('express');
 const config = require('./config');
 const { pool, init } = require('./db');
@@ -238,7 +240,23 @@ app.post('/admin/:id/confirm', adminAuth, (req, res) => adminAction(req, res, 'c
 app.post('/admin/:id/decline', adminAuth, (req, res) => adminAction(req, res, 'cancelled', email.patientCancelled));
 app.post('/admin/:id/cancel', adminAuth, (req, res) => adminAction(req, res, 'cancelled', email.patientCancelled));
 
-app.get('/', (_req, res) => res.type('text').send('Virthy booking API is running. See /health'));
+// Serve the front-end page at the root (and its sibling assets like support.js
+// if present), so visiting the site shows index.html rather than API text.
+app.get('/', (_req, res) => {
+  const indexPath = path.join(__dirname, 'index.html');
+  if (fs.existsSync(indexPath)) return res.sendFile(indexPath);
+  res.type('text').send('Virthy booking API is running. See /health');
+});
+// Allow index.html to load ./support.js (its framework) and other root assets,
+// but never expose the server source or env files.
+app.get('/:file', (req, res, next) => {
+  const name = req.params.file;
+  if (!/^[\w.-]+\.(js|css|png|jpg|jpeg|svg|ico|webp|woff2?)$/.test(name)) return next();
+  if (['server.js', 'config.js', 'db.js', 'availability.js', 'email.js'].includes(name)) return next();
+  const p = path.join(__dirname, name);
+  if (fs.existsSync(p)) return res.sendFile(p);
+  next();
+});
 
 // --- boot -------------------------------------------------------------------
 const PORT = process.env.PORT || 3000;
