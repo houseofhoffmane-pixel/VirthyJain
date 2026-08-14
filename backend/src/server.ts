@@ -50,7 +50,9 @@ export async function buildServer() {
       const html = await readFile(INDEX_HTML, 'utf8');
       reply.type('text/html').send(html);
     } catch {
-      reply.code(404).send('Front end not found');
+      // Front end lives on GitHub Pages; the backend's own "/" just needs to
+      // answer 200 so platform health checks that probe "/" pass.
+      reply.type('text/html').send('Virthy booking API is running. See /health');
     }
   });
 
