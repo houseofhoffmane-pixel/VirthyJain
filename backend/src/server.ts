@@ -10,6 +10,7 @@ import { publicRoutes } from './routes/public.js';
 import { manageRoutes } from './routes/manage.js';
 import { adminRoutes } from './routes/admin.js';
 import { expirePending } from './jobs/expirePending.js';
+import { migrate } from './lib/migrate.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const INDEX_HTML = join(__dirname, '..', '..', 'index.html'); // the existing front end
@@ -58,6 +59,19 @@ export async function buildServer() {
 
 // Boot when run directly.
 if (import.meta.url === `file://${process.argv[1]}`) {
+  // Apply DB migrations on boot (idempotent). Set SKIP_MIGRATE_ON_BOOT=true to
+  // disable if you prefer a separate release step. If the DB is unreachable
+  // this throws and the deploy fails loudly rather than serving 500s.
+  if (process.env.SKIP_MIGRATE_ON_BOOT !== 'true') {
+    await migrate();
+  }
+  // One-time seeding on the host: set SEED_ON_BOOT=true for a single deploy,
+  // then remove it. Non-destructive, so leaving it on won't clobber edits.
+  if (process.env.SEED_ON_BOOT === 'true') {
+    const { seedInitialData } = await import('./lib/seed.js');
+    await seedInitialData();
+  }
+
   const app = await buildServer();
   await app.listen({ port: config.port, host: '0.0.0.0' });
   app.log.info(`Virthy booking backend on :${config.port} (${config.env})`);
