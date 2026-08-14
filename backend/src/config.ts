@@ -17,7 +17,10 @@ export const config = {
   publicBaseUrl: opt('PUBLIC_BASE_URL', 'http://localhost:3000'),
 
   databaseUrl: opt('DATABASE_URL', 'postgres://virthy:virthy@localhost:5432/virthy'),
-  databaseSsl: opt('DATABASE_SSL', 'disable') === 'require',
+  // 'require' = encrypted, no CA verification (works with Supabase/Neon).
+  // 'verify'  = encrypted + strict CA verification. 'disable' = no TLS.
+  databaseSsl: ['require', 'verify'].includes(opt('DATABASE_SSL', 'disable')),
+  databaseSslVerify: opt('DATABASE_SSL', 'disable') === 'verify',
 
   // Comma-separated base64 32-byte keys; first is the active encryption key.
   dataEncryptionKeys: opt('DATA_ENCRYPTION_KEYS', '')

@@ -9,7 +9,13 @@ import { config } from '../config.js';
 
 export const pool = new pg.Pool({
   connectionString: config.databaseUrl,
-  ssl: config.databaseSsl ? { rejectUnauthorized: true } : undefined,
+  // Managed Postgres (Supabase/Neon) requires TLS. We keep the connection
+  // encrypted but don't verify the CA chain by default, since providers use
+  // certs not always in the system trust store (avoids "self-signed cert in
+  // chain" errors). Set DATABASE_SSL=verify for strict CA verification.
+  ssl: config.databaseSsl
+    ? { rejectUnauthorized: config.databaseSslVerify }
+    : undefined,
   max: 10,
 });
 
