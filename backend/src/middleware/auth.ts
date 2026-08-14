@@ -48,11 +48,17 @@ export function getSessionEmail(req: FastifyRequest): string | null {
 
 export async function verifyCredentials(email: string, password: string): Promise<boolean> {
   if (email.trim().toLowerCase() !== config.adminEmail.toLowerCase()) return false;
-  if (!config.adminPasswordHash) {
-    // Dev convenience only: allow "changeme" when no hash is configured.
-    return config.env !== 'production' && password === 'changeme';
+  if (config.adminPasswordHash) {
+    return bcrypt.compare(password, config.adminPasswordHash);
   }
-  return bcrypt.compare(password, config.adminPasswordHash);
+  if (config.adminPassword) {
+    // Timing-safe plaintext comparison (password lives only in a secret env var).
+    const a = Buffer.from(password);
+    const b = Buffer.from(config.adminPassword);
+    return a.length === b.length && timingSafeEqual(a, b);
+  }
+  // Dev convenience only: allow "changeme" when nothing is configured.
+  return config.env !== 'production' && password === 'changeme';
 }
 
 /** Guard for admin routes. Redirects browsers to /admin/login, 401s API calls. */

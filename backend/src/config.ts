@@ -30,6 +30,9 @@ export const config = {
 
   adminEmail: opt('ADMIN_EMAIL', 'virthy@virthyjain.ie'),
   adminPasswordHash: opt('ADMIN_PASSWORD_HASH', ''),
+  // Plaintext alternative to the bcrypt hash, for hosts where you can't easily
+  // run the hash tool. Set ONE of ADMIN_PASSWORD_HASH or ADMIN_PASSWORD.
+  adminPassword: process.env.ADMIN_PASSWORD ?? '',
 
   smtp: {
     host: opt('SMTP_HOST', 'localhost'),
@@ -53,6 +56,8 @@ export function assertProductionSecrets() {
     req('DATA_ENCRYPTION_KEYS');
     req('TOKEN_SIGNING_SECRET');
     req('SESSION_SECRET');
-    req('ADMIN_PASSWORD_HASH');
+    if (!config.adminPasswordHash && !config.adminPassword) {
+      throw new Error('Set ADMIN_PASSWORD_HASH or ADMIN_PASSWORD in production');
+    }
   }
 }
