@@ -1,0 +1,716 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Public+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  *, *::before, *::after { box-sizing: border-box; }
+  html { scroll-behavior: smooth; -webkit-text-size-adjust: 100%; }
+  body { margin: 0; background: #F2EEE6; color: #16201C; font-family: 'Public Sans', system-ui, sans-serif; -webkit-font-smoothing: antialiased; overflow-x: hidden; }
+  a { color: #B4562F; text-decoration: none; }
+  a:hover { color: #16201C; }
+  input, select, textarea, button { font-family: inherit; max-width: 100%; }
+  ::selection { background: #C9D6C4; }
+  @keyframes rise { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+</style>
+</helmet>
+<div style="max-width: 1240px; margin: 0 auto; padding: 0 clamp(18px, 4vw, 40px)">
+
+<header style="position: sticky; top: 0; z-index: 20; display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 12px 28px; padding: 18px 0 14px; background: linear-gradient(#F2EEE6 74%, rgba(242,238,230,0))">
+  <a href="#top" style="font-family: 'Instrument Serif', serif; font-size: 22px; letter-spacing: -0.01em; color: #16201C">Virthy&nbsp;Jain<span style="color: #B4562F">.</span></a>
+  <nav style="display: flex; align-items: center; flex-wrap: wrap; gap: 10px 22px; font-size: 13.5px; letter-spacing: 0.02em">
+    <a href="#practice" style="color: #4A574F">Practice</a>
+    <a href="#map" style="color: #4A574F">Where it hurts</a>
+    <a href="#experience" style="color: #4A574F">Experience</a>
+    <a href="#expertise" style="color: #4A574F">Expertise</a>
+    <a href="#projects" style="color: #4A574F">Projects</a>
+    <a href="#book" style="padding: 10px 18px; border-radius: 999px; background: #16201C; color: #F2EEE6; font-weight: 500">Book a session</a>
+  </nav>
+</header>
+
+<section id="top" style="padding: clamp(32px, 5vw, 56px) 0 clamp(48px, 6vw, 72px); border-bottom: 1px solid #DCD5C7">
+  <div style="display: flex; flex-wrap: wrap; align-items: flex-end; gap: clamp(32px, 5vw, 56px)">
+    <div style="flex: 1 1 420px; min-width: 0">
+      <div style="display: flex; align-items: center; gap: 10px; font-size: 12px; letter-spacing: 0.14em; text-transform: uppercase; color: #6C7A70; margin-bottom: 24px">
+        <span style="width: 7px; height: 7px; border-radius: 50%; background: #4E7A5E"></span>
+        Accepting new patients in Dublin
+      </div>
+      <h1 style="font-family: 'Instrument Serif', serif; font-weight: 400; font-size: clamp(40px, 7vw, 92px); line-height: 0.98; letter-spacing: -0.02em; margin: 0 0 24px; text-wrap: balance">
+        Movement, restored with <em style="color: #B4562F">evidence</em> and patience.
+      </h1>
+      <p style="max-width: 54ch; font-size: clamp(16.5px, 2vw, 18.5px); line-height: 1.6; color: #3D4A42; margin: 0 0 32px; text-wrap: pretty">
+        I am a physiotherapist registered with CORU in Dublin, with three years of clinical practice across orthopaedic, neurological, postoperative, oncology and women's health care. I have treated patients in hospitals, in clinics, in their own homes and online.
+      </p>
+      <div style="display: flex; flex-wrap: wrap; gap: 12px">
+        <a href="#book" style="padding: 15px 26px; border-radius: 999px; background: #B4562F; color: #FFF8F0; font-size: 15px; font-weight: 500" style-hover="background: #16201C">Book a physio session</a>
+        <a href="#practice" style="padding: 15px 26px; border-radius: 999px; border: 1px solid #C9C2B2; color: #16201C; font-size: 15px" style-hover="border-color: #16201C">See how I work</a>
+      </div>
+    </div>
+    <div style="flex: 1 1 380px; min-width: 0; max-width: 480px; border: 1px solid #C9C2B2; background: #FFFDF8; padding: clamp(20px, 2.6vw, 28px); box-shadow: 0 18px 44px -34px rgba(22,32,28,0.5)">
+      <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 4px">
+        <div style="font-size: 11.5px; letter-spacing: 0.14em; text-transform: uppercase; color: #B4562F">Sixty second plan</div>
+        <div style="display: flex; gap: 5px">
+          <sc-for list="{{ planDots }}" as="dot" hint-placeholder-count="4">
+            <span style="display: grid">
+              <sc-if value="{{ dot.on }}"><span style="width: 6px; height: 6px; border-radius: 50%; background: #B4562F"></span></sc-if>
+              <sc-if value="{{ dot.off }}"><span style="width: 6px; height: 6px; border-radius: 50%; background: #DCD5C7"></span></sc-if>
+            </span>
+          </sc-for>
+        </div>
+      </div>
+      <div style="font-family: 'Instrument Serif', serif; font-size: clamp(21px, 2.6vw, 25px); line-height: 1.15; letter-spacing: -0.01em; margin-bottom: 16px">{{ planHeading }}</div>
+
+      <sc-if value="{{ planPicking }}" hint-placeholder-val="{{ true }}">
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(124px, 1fr)); gap: 8px">
+          <sc-for list="{{ planChoices }}" as="c" hint-placeholder-count="6">
+            <button type="button" onClick="{{ c.select }}" style="padding: 12px 14px; min-height: 46px; border: 1px solid #C9C2B2; border-radius: 3px; background: #FFFDF8; color: #16201C; font-size: 14px; line-height: 1.3; text-align: center; cursor: pointer" style-hover="border-color: #4E7A5E; background: #EDF1E9">{{ c.label }}</button>
+          </sc-for>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ planDone }}" hint-placeholder-val="{{ false }}">
+        <div style="animation: rise 0.35s ease both">
+          <p style="margin: 0 0 18px; font-size: 15.5px; line-height: 1.6; color: #3D4A42; text-wrap: pretty">{{ planStage }}</p>
+          <div style="display: grid; gap: 14px; padding: 18px 0; border-top: 1px solid #E4DED1; border-bottom: 1px solid #E4DED1">
+            <div>
+              <div style="font-size: 11px; letter-spacing: 0.13em; text-transform: uppercase; color: #4E7A5E; margin-bottom: 5px; font-weight: 600">Your first session</div>
+              <p style="margin: 0; font-size: 14.5px; line-height: 1.55; color: #3D4A42">{{ planFirst }}</p>
+            </div>
+            <div>
+              <div style="font-size: 11px; letter-spacing: 0.13em; text-transform: uppercase; color: #4E7A5E; margin-bottom: 5px; font-weight: 600">Likely course</div>
+              <p style="margin: 0; font-size: 14.5px; line-height: 1.55; color: #3D4A42">{{ planArc }}</p>
+            </div>
+            <div style="display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 6px 14px">
+              <div style="font-size: 11px; letter-spacing: 0.13em; text-transform: uppercase; color: #4E7A5E; font-weight: 600">Suggested booking</div>
+              <div style="font-size: 14.5px">{{ planService }}</div>
+            </div>
+          </div>
+          <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-top: 18px">
+            <button type="button" onClick="{{ planBook }}" style="padding: 14px 24px; border-radius: 999px; border: none; background: #B4562F; color: #FFF8F0; font-size: 15px; font-weight: 500; cursor: pointer" style-hover="background: #16201C">Hold a slot for this</button>
+            <button type="button" onClick="{{ planReset }}" style="padding: 0; border: none; background: none; color: #6C7A70; font-size: 14px; cursor: pointer; text-decoration: underline">Start again</button>
+          </div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ planCanGoBack }}" hint-placeholder-val="{{ false }}">
+        <button type="button" onClick="{{ planBack }}" style="margin-top: 16px; padding: 0; border: none; background: none; color: #6C7A70; font-size: 13.5px; cursor: pointer">← Back a step</button>
+      </sc-if>
+      <p style="margin: 16px 0 0; font-size: 12px; line-height: 1.5; color: #8A9188">A guide based on how I usually start, not a diagnosis. We confirm everything in the room.</p>
+    </div>
+  </div>
+  <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 24px clamp(24px, 4vw, 40px); margin-top: clamp(36px, 5vw, 56px)">
+    <div style="padding: 18px 0 0; border-top: 1px solid #DCD5C7">
+      <div style="font-family: 'Instrument Serif', serif; font-size: 40px; line-height: 1">3+</div>
+      <div style="font-size: 13px; color: #6C7A70; letter-spacing: 0.02em">years of clinical practice</div>
+    </div>
+    <div style="padding: 18px 0 0; border-top: 1px solid #DCD5C7">
+      <div style="font-family: 'Instrument Serif', serif; font-size: 40px; line-height: 1">9</div>
+      <div style="font-size: 13px; color: #6C7A70; letter-spacing: 0.02em">clinical specialities covered</div>
+    </div>
+    <div style="padding: 18px 0 0; border-top: 1px solid #DCD5C7">
+      <div style="font-family: 'Instrument Serif', serif; font-size: 40px; line-height: 1">MSc</div>
+      <div style="font-size: 13px; color: #6C7A70; letter-spacing: 0.02em">Health Informatics, University of Limerick</div>
+    </div>
+  </div>
+  <div style="display: flex; flex-wrap: wrap; gap: 10px; margin-top: clamp(32px, 4vw, 46px)">
+    <span style="padding: 8px 15px; border-radius: 999px; background: #E6E1D5; font-size: 12.5px; letter-spacing: 0.04em; color: #3D4A42">Registered with CORU</span>
+    <span style="padding: 8px 15px; border-radius: 999px; background: #E6E1D5; font-size: 12.5px; letter-spacing: 0.04em; color: #3D4A42">Member of the ISCP</span>
+    <span style="padding: 8px 15px; border-radius: 999px; background: #E6E1D5; font-size: 12.5px; letter-spacing: 0.04em; color: #3D4A42">Dry Needling, Irish Standard</span>
+    <span style="padding: 8px 15px; border-radius: 999px; background: #E6E1D5; font-size: 12.5px; letter-spacing: 0.04em; color: #3D4A42">Vestibular Rehabilitation</span>
+    <span style="padding: 8px 15px; border-radius: 999px; background: #E6E1D5; font-size: 12.5px; letter-spacing: 0.04em; color: #3D4A42">Women's Health Physiotherapy</span>
+  </div>
+</section>
+
+<section id="practice" style="padding: clamp(56px, 8vw, 88px) 0; border-bottom: 1px solid #DCD5C7">
+  <div style="display: flex; flex-wrap: wrap; gap: clamp(28px, 5vw, 56px)">
+    <h2 style="flex: 1 1 240px; font-family: 'Instrument Serif', serif; font-weight: 400; font-size: clamp(28px, 3.6vw, 34px); line-height: 1.1; margin: 0; letter-spacing: -0.01em">The practice</h2>
+    <div style="flex: 3 1 460px; min-width: 0">
+      <p style="font-size: clamp(18px, 2.3vw, 21px); line-height: 1.55; color: #16201C; margin: 0 0 22px; text-wrap: pretty">
+        Every plan begins with a functional assessment and a goal that genuinely matters to you, whether that is walking the pier again, returning to the pitch, or lifting your child without pain.
+      </p>
+      <p style="font-size: 16.5px; line-height: 1.7; color: #4A574F; margin: 0 0 36px; max-width: 62ch; text-wrap: pretty">
+        Treatment combines manual therapy, graded exercise prescription and clear patient education, documented to the standards CORU requires. My MSc in Health Informatics shapes how progress is tracked: structured outcome measures, reviewed session by session, so that we both know whether the plan is working.
+      </p>
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 1px; background: #DCD5C7; border: 1px solid #DCD5C7">
+        <div style="background: #F2EEE6; padding: 24px 22px">
+          <div style="font-size: 12px; letter-spacing: 0.12em; text-transform: uppercase; color: #B4562F; margin-bottom: 12px">01 Assess</div>
+          <p style="margin: 0; font-size: 14.5px; line-height: 1.6; color: #3D4A42">A full history, functional movement screening and objective baselines, all within the first session.</p>
+        </div>
+        <div style="background: #F2EEE6; padding: 24px 22px">
+          <div style="font-size: 12px; letter-spacing: 0.12em; text-transform: uppercase; color: #B4562F; margin-bottom: 12px">02 Treat</div>
+          <p style="margin: 0; font-size: 14.5px; line-height: 1.6; color: #3D4A42">Joint mobilisation, dry needling, therapeutic taping, myofascial release and vestibular protocols where they are indicated.</p>
+        </div>
+        <div style="background: #F2EEE6; padding: 24px 22px">
+          <div style="font-size: 12px; letter-spacing: 0.12em; text-transform: uppercase; color: #B4562F; margin-bottom: 12px">03 Progress</div>
+          <p style="margin: 0; font-size: 14.5px; line-height: 1.6; color: #3D4A42">A home programme designed around your week, monitored outcomes, and a clear discharge plan you leave with.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="map" style="padding: clamp(56px, 8vw, 88px) 0; border-bottom: 1px solid #DCD5C7">
+  <div style="display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 12px 24px; margin-bottom: 10px">
+    <h2 style="font-family: 'Instrument Serif', serif; font-weight: 400; font-size: clamp(28px, 3.6vw, 34px); margin: 0; letter-spacing: -0.01em">Where does it hurt?</h2>
+    <div style="font-size: 13px; color: #6C7A70">Choose a region and see the plan before you book</div>
+  </div>
+  <p style="max-width: 60ch; font-size: 16px; line-height: 1.65; color: #4A574F; margin: 0 0 32px; text-wrap: pretty">This is an orientation rather than a diagnosis. Each region explains how I would assess it, what treatment usually involves, and how long recovery realistically takes.</p>
+  <div style="display: flex; flex-wrap: wrap; gap: 1px; background: #DCD5C7; border: 1px solid #DCD5C7">
+    <div style="flex: 1 1 330px; background: #F2EEE6; padding: 20px; display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; align-content: start">
+      <sc-for list="{{ zones }}" as="z" hint-placeholder-count="8">
+        <button type="button" onClick="{{ z.select }}" style="position: relative; display: grid; gap: 10px; align-content: start; width: 100%; min-height: 92px; padding: 16px 15px; border: 1px solid #C9C2B2; border-radius: 3px; background: #FFFDF8; color: #16201C; text-align: left; cursor: pointer" style-hover="border-color: #4E7A5E">
+          <sc-if value="{{ z.on }}"><span style="position: absolute; inset: 0; border: 1px solid #4E7A5E; box-shadow: inset 0 0 0 1px #4E7A5E; background: #EDF1E9; border-radius: 3px; pointer-events: none"></span></sc-if>
+          <span style="position: relative; display: grid; gap: 10px; align-content: start">
+            {{ z.glyph }}
+            <span style="font-size: 14.5px; line-height: 1.3">{{ z.name }}</span>
+          </span>
+        </button>
+      </sc-for>
+    </div>
+    <div style="flex: 1 1 340px; background: #F7F4EE; padding: clamp(24px, 3vw, 34px) clamp(20px, 3vw, 32px); display: grid; align-content: start; gap: 22px">
+      <div>
+        <div style="font-size: 12px; letter-spacing: 0.13em; text-transform: uppercase; color: #B4562F; margin-bottom: 10px">{{ zoneTag }}</div>
+        <h3 style="font-family: 'Instrument Serif', serif; font-weight: 400; font-size: clamp(25px, 3vw, 30px); line-height: 1.1; margin: 0 0 12px; letter-spacing: -0.01em">{{ zoneTitle }}</h3>
+        <p style="margin: 0; font-size: 16px; line-height: 1.65; color: #3D4A42; text-wrap: pretty">{{ zoneBlurb }}</p>
+      </div>
+      <div style="display: grid; gap: 16px; padding-top: 20px; border-top: 1px solid #DCD5C7">
+        <div>
+          <div style="font-size: 11.5px; letter-spacing: 0.13em; text-transform: uppercase; color: #4E7A5E; margin-bottom: 6px; font-weight: 600">Assessment</div>
+          <p style="margin: 0; font-size: 15px; line-height: 1.6; color: #3D4A42">{{ zoneAssess }}</p>
+        </div>
+        <div>
+          <div style="font-size: 11.5px; letter-spacing: 0.13em; text-transform: uppercase; color: #4E7A5E; margin-bottom: 6px; font-weight: 600">Treatment</div>
+          <p style="margin: 0; font-size: 15px; line-height: 1.6; color: #3D4A42">{{ zoneTreat }}</p>
+        </div>
+        <div>
+          <div style="font-size: 11.5px; letter-spacing: 0.13em; text-transform: uppercase; color: #4E7A5E; margin-bottom: 6px; font-weight: 600">Typical recovery</div>
+          <p style="margin: 0; font-size: 15px; line-height: 1.6; color: #3D4A42">{{ zoneArc }}</p>
+        </div>
+      </div>
+      <button type="button" onClick="{{ bookZone }}" style="justify-self: start; padding: 14px 24px; border-radius: 999px; border: none; background: #16201C; color: #F2EEE6; font-size: 14.5px; cursor: pointer" style-hover="background: #B4562F">Book for this →</button>
+    </div>
+  </div>
+</section>
+
+<section id="experience" style="padding: clamp(56px, 8vw, 88px) 0; border-bottom: 1px solid #DCD5C7">
+  <div style="display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 12px 24px; margin-bottom: clamp(28px, 4vw, 48px)">
+    <h2 style="font-family: 'Instrument Serif', serif; font-weight: 400; font-size: clamp(28px, 3.6vw, 34px); margin: 0; letter-spacing: -0.01em">Clinical experience</h2>
+    <div style="font-size: 13px; color: #6C7A70">Ireland and India, 2019 to present</div>
+  </div>
+  <div style="display: grid; gap: 0">
+    <sc-for list="{{ roles }}" as="role" hint-placeholder-count="3">
+      <article style="display: flex; flex-wrap: wrap; gap: 12px clamp(24px, 4vw, 40px); padding: 28px 0; border-top: 1px solid #DCD5C7">
+        <div style="flex: 1 1 180px">
+          <div style="font-size: 13px; letter-spacing: 0.04em; color: #B4562F; margin-bottom: 8px">{{ role.dates }}</div>
+          <div style="font-size: 13px; color: #6C7A70">{{ role.place }}</div>
+        </div>
+        <div style="flex: 3 1 420px; min-width: 0">
+          <h3 style="font-family: 'Instrument Serif', serif; font-weight: 400; font-size: clamp(22px, 2.6vw, 25px); margin: 0 0 4px; letter-spacing: -0.01em">{{ role.title }}</h3>
+          <div style="font-size: 14px; color: #4A574F; margin-bottom: 16px">{{ role.org }}</div>
+          <ul style="margin: 0; padding: 0; list-style: none; display: grid; gap: 9px">
+            <sc-for list="{{ role.points }}" as="point" hint-placeholder-count="2">
+              <li style="position: relative; padding-left: 18px; font-size: 15px; line-height: 1.6; color: #3D4A42; text-wrap: pretty">
+                <span style="position: absolute; left: 0; top: 9px; width: 6px; height: 1px; background: #A9B3A9"></span>{{ point }}
+              </li>
+            </sc-for>
+          </ul>
+        </div>
+      </article>
+    </sc-for>
+  </div>
+</section>
+
+<section id="expertise" style="padding: clamp(56px, 8vw, 88px) 0; border-bottom: 1px solid #DCD5C7">
+  <h2 style="font-family: 'Instrument Serif', serif; font-weight: 400; font-size: clamp(28px, 3.6vw, 34px); margin: 0 0 clamp(28px, 4vw, 44px); letter-spacing: -0.01em">Expertise</h2>
+  <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 28px clamp(28px, 5vw, 56px)">
+    <sc-for list="{{ competencies }}" as="group" hint-placeholder-count="6">
+      <div style="padding-top: 20px; border-top: 1px solid #DCD5C7">
+        <h3 style="font-size: 12px; letter-spacing: 0.13em; text-transform: uppercase; color: #4E7A5E; margin: 0 0 12px; font-weight: 600">{{ group.label }}</h3>
+        <p style="margin: 0; font-size: 16px; line-height: 1.65; color: #3D4A42; text-wrap: pretty">{{ group.items }}</p>
+      </div>
+    </sc-for>
+  </div>
+  <div style="margin-top: clamp(40px, 6vw, 64px); display: flex; flex-wrap: wrap; gap: clamp(24px, 5vw, 56px)">
+    <h3 style="flex: 1 1 240px; font-family: 'Instrument Serif', serif; font-weight: 400; font-size: clamp(23px, 2.8vw, 26px); margin: 0; letter-spacing: -0.01em">Certifications and training</h3>
+    <div style="flex: 3 1 420px; display: flex; flex-wrap: wrap; gap: 9px; align-content: start">
+      <sc-for list="{{ certifications }}" as="cert" hint-placeholder-count="8">
+        <span style="padding: 10px 16px; border: 1px solid #C9C2B2; border-radius: 4px; font-size: 13.5px; color: #3D4A42; background: #F7F4EE">{{ cert }}</span>
+      </sc-for>
+    </div>
+  </div>
+</section>
+
+<section id="projects" style="padding: clamp(56px, 8vw, 88px) 0; border-bottom: 1px solid #DCD5C7">
+  <h2 style="font-family: 'Instrument Serif', serif; font-weight: 400; font-size: clamp(28px, 3.6vw, 34px); margin: 0 0 clamp(28px, 4vw, 44px); letter-spacing: -0.01em">Selected projects</h2>
+  <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1px; background: #DCD5C7; border: 1px solid #DCD5C7">
+    <div style="background: #F7F4EE; padding: clamp(26px, 3.4vw, 36px) clamp(22px, 3vw, 34px)">
+      <div style="font-size: 12px; letter-spacing: 0.12em; text-transform: uppercase; color: #B4562F; margin-bottom: 16px">2021 to 2022 · Hospital rotation</div>
+      <h3 style="font-family: 'Instrument Serif', serif; font-weight: 400; font-size: clamp(23px, 2.9vw, 27px); line-height: 1.15; margin: 0 0 14px">A rotational internship across five specialities</h3>
+      <p style="margin: 0 0 18px; font-size: 15.5px; line-height: 1.65; color: #3D4A42; text-wrap: pretty">I completed structured clinical rotations in paediatrics, neurology, orthopaedics, geriatrics and cardiothoracic care at Index Medical College and Research Centre, delivering both individual and group rehabilitation programmes.</p>
+      <p style="margin: 0; font-size: 15.5px; line-height: 1.65; color: #3D4A42; text-wrap: pretty">The role also covered paediatric functional mobility training and community intervention programmes, including home visits and outreach services.</p>
+    </div>
+    <div style="background: #F7F4EE; padding: clamp(26px, 3.4vw, 36px) clamp(22px, 3vw, 34px)">
+      <div style="font-size: 12px; letter-spacing: 0.12em; text-transform: uppercase; color: #B4562F; margin-bottom: 16px">2025 · Sports performance</div>
+      <h3 style="font-family: 'Instrument Serif', serif; font-weight: 400; font-size: clamp(23px, 2.9vw, 27px); line-height: 1.15; margin: 0 0 14px">Strength, conditioning and injury prevention for UL Women's Gaelic Football</h3>
+      <p style="margin: 0 0 18px; font-size: 15.5px; line-height: 1.65; color: #3D4A42; text-wrap: pretty">I designed and delivered strength and conditioning sessions built around the specific performance demands of Gaelic football.</p>
+      <p style="margin: 0; font-size: 15.5px; line-height: 1.65; color: #3D4A42; text-wrap: pretty">Alongside that, I put injury prevention strategies and safe return-to-play protocols in place, adapting each programme as athlete performance and recovery data changed.</p>
+    </div>
+  </div>
+  <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 28px clamp(24px, 4vw, 40px); margin-top: clamp(36px, 5vw, 56px)">
+    <div>
+      <div style="font-size: 12px; letter-spacing: 0.13em; text-transform: uppercase; color: #4E7A5E; margin-bottom: 10px; font-weight: 600">Education</div>
+      <p style="margin: 0; font-size: 15.5px; line-height: 1.6; color: #3D4A42">MSc in Health Informatics, University of Limerick, 2023 to 2024. Bachelor of Physiotherapy with Honours, Index Medical College, where I was a University Rank Holder and graduated top of the programme, 2017 to 2021.</p>
+    </div>
+    <div>
+      <div style="font-size: 12px; letter-spacing: 0.13em; text-transform: uppercase; color: #4E7A5E; margin-bottom: 10px; font-weight: 600">Languages</div>
+      <p style="margin: 0; font-size: 15.5px; line-height: 1.6; color: #3D4A42">English at full professional level and Hindi as a native speaker.</p>
+    </div>
+    <div>
+      <div style="font-size: 12px; letter-spacing: 0.13em; text-transform: uppercase; color: #4E7A5E; margin-bottom: 10px; font-weight: 600">Also</div>
+      <p style="margin: 0; font-size: 15.5px; line-height: 1.6; color: #3D4A42">University of Limerick Ambassador in 2024. Available for permanent, part-time and locum roles, and fully eligible to work in Ireland.</p>
+    </div>
+  </div>
+</section>
+
+<section id="book" style="padding: clamp(56px, 8vw, 88px) 0 clamp(64px, 8vw, 96px)">
+  <div style="display: flex; flex-wrap: wrap; gap: clamp(28px, 5vw, 56px); align-items: flex-start">
+    <div style="flex: 1 1 280px; position: sticky; top: 92px">
+      <h2 style="font-family: 'Instrument Serif', serif; font-weight: 400; font-size: clamp(32px, 4.2vw, 40px); line-height: 1.05; margin: 0 0 16px; letter-spacing: -0.02em">Book a physio session</h2>
+      <p style="font-size: 16.5px; line-height: 1.65; color: #4A574F; margin: 0 0 26px; text-wrap: pretty">Choose a service, a way to meet and a time that suits you. You will receive a confirmation telling you what to wear and what to bring.</p>
+      <div style="display: grid; gap: 14px; padding-top: 22px; border-top: 1px solid #DCD5C7; font-size: 14.5px; color: #3D4A42">
+        <div style="display: flex; justify-content: space-between; gap: 16px"><span style="color: #6C7A70">Initial assessment</span><span>55 min · €70</span></div>
+        <div style="display: flex; justify-content: space-between; gap: 16px"><span style="color: #6C7A70">Return visit</span><span>40 min · €55</span></div>
+        <div style="display: flex; justify-content: space-between; gap: 16px"><span style="color: #6C7A70">Women's health</span><span>50 min · €70</span></div>
+        <div style="display: flex; justify-content: space-between; gap: 16px"><span style="color: #6C7A70">Sports and return-to-play</span><span>50 min · €65</span></div>
+      </div>
+      <div style="margin-top: 28px; border: 1px solid #DCD5C7; background: #F7F4EE; padding: 24px 22px">
+        <div style="font-family: 'Instrument Serif', serif; font-size: 21px; letter-spacing: -0.01em; margin-bottom: 6px">Rather talk it through first?</div>
+        <p style="margin: 0 0 18px; font-size: 14.5px; line-height: 1.6; color: #4A574F">If you are unsure which service fits, send a note or call. A short conversation usually settles it.</p>
+        <div style="display: grid; gap: 12px; font-size: 14.5px">
+          <a href="mailto:virtee9808@gmail.com" style="display: flex; align-items: baseline; justify-content: space-between; gap: 14px; padding-bottom: 12px; border-bottom: 1px solid #E4DED1"><span style="font-size: 11.5px; letter-spacing: 0.13em; text-transform: uppercase; color: #6C7A70">Email</span><span>virtee9808@gmail.com</span></a>
+          <a href="tel:+353877065821" style="display: flex; align-items: baseline; justify-content: space-between; gap: 14px; padding-bottom: 12px; border-bottom: 1px solid #E4DED1"><span style="font-size: 11.5px; letter-spacing: 0.13em; text-transform: uppercase; color: #6C7A70">Phone</span><span>+353 87 706 5821</span></a>
+          <a href="https://www.linkedin.com/in/virthy-trilokchand-jain-b86390240/" target="_blank" rel="noopener" style="display: flex; align-items: center; justify-content: space-between; gap: 14px; padding-bottom: 12px; border-bottom: 1px solid #E4DED1"><span style="font-size: 11.5px; letter-spacing: 0.13em; text-transform: uppercase; color: #6C7A70">LinkedIn</span><span style="display: flex; align-items: center; gap: 8px"><svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M4.98 3.5a2.5 2.5 0 1 1 0 5 2.5 2.5 0 0 1 0-5zM3 9h4v12H3zM9 9h3.8v1.7h.05A4.2 4.2 0 0 1 16.6 8.7c3.2 0 4.4 2 4.4 5.1V21h-4v-6c0-1.5-.5-2.6-1.9-2.6-1.2 0-1.9.8-2.2 1.6-.1.3-.1.7-.1 1V21H9z"></path></svg>Full profile</span></a>
+          <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 14px; color: #3D4A42"><span style="font-size: 11.5px; letter-spacing: 0.13em; text-transform: uppercase; color: #6C7A70">Based in</span><span>Dublin, Ireland</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div style="flex: 2 1 460px; min-width: 0">
+      <sc-if value="{{ booked }}" hint-placeholder-val="{{ false }}">
+        <div style="border: 1px solid #4E7A5E; background: #EDF1E9; padding: clamp(28px, 4vw, 44px) clamp(22px, 3.4vw, 40px); animation: rise 0.4s ease both">
+          <div style="width: 34px; height: 34px; border-radius: 50%; background: #4E7A5E; color: #F2EEE6; display: grid; place-items: center; font-size: 17px; margin-bottom: 22px">✓</div>
+          <h3 style="font-family: 'Instrument Serif', serif; font-weight: 400; font-size: clamp(25px, 3.2vw, 30px); margin: 0 0 12px; letter-spacing: -0.01em">Your request is in, {{ confirmName }}</h3>
+          <p style="margin: 0 0 26px; font-size: 16px; line-height: 1.6; color: #3D4A42; max-width: 48ch">A confirmation is on its way to {{ confirmEmail }}. If anything changes, reply to that email and we will move the slot.</p>
+          <div style="display: grid; gap: 12px; padding: 22px 0; border-top: 1px solid #C4D0BE; border-bottom: 1px solid #C4D0BE; font-size: 15px">
+            <div style="display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px 16px"><span style="color: #6C7A70">Service</span><span>{{ confirmService }}</span></div>
+            <div style="display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px 16px"><span style="color: #6C7A70">Format</span><span>{{ confirmMode }}</span></div>
+            <div style="display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px 16px"><span style="color: #6C7A70">When</span><span>{{ confirmWhen }}</span></div>
+          </div>
+          <button type="button" onClick="{{ reset }}" style="margin-top: 26px; padding: 14px 24px; border-radius: 999px; border: 1px solid #16201C; background: transparent; color: #16201C; font-size: 14.5px; cursor: pointer" style-hover="background: #16201C; color: #F2EEE6">Book another session</button>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ formOpen }}" hint-placeholder-val="{{ true }}">
+        <form onSubmit="{{ submit }}" style="border: 1px solid #DCD5C7; background: #F7F4EE; padding: clamp(24px, 3.4vw, 36px) clamp(20px, 3vw, 34px)">
+          <div style="margin-bottom: 30px">
+            <div style="font-size: 12px; letter-spacing: 0.13em; text-transform: uppercase; color: #6C7A70; margin-bottom: 14px; font-weight: 600">Step one · Service</div>
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px">
+              <sc-for list="{{ services }}" as="s" hint-placeholder-count="4">
+                <button type="button" onClick="{{ s.select }}" style="position: relative; display: grid; align-content: start; width: 100%; min-height: 46px; padding: 13px 16px; border: 1px solid #C9C2B2; border-radius: 3px; background: #FFFDF8; color: #16201C; text-align: left; cursor: pointer" style-hover="border-color: #4E7A5E">
+                  <sc-if value="{{ s.on }}"><span style="position: absolute; inset: 0; border: 1px solid #4E7A5E; box-shadow: inset 0 0 0 1px #4E7A5E; background: #EDF1E9; border-radius: 3px; pointer-events: none"></span></sc-if>
+                  <span style="position: relative; display: grid; gap: 3px">
+                    <span style="font-size: 15px">{{ s.name }}</span>
+                    <span style="font-size: 13px; color: #6C7A70">{{ s.duration }}</span>
+                  </span>
+                </button>
+              </sc-for>
+            </div>
+          </div>
+
+          <div style="margin-bottom: 30px">
+            <div style="font-size: 12px; letter-spacing: 0.13em; text-transform: uppercase; color: #6C7A70; margin-bottom: 14px; font-weight: 600">Step two · Where we meet</div>
+            <div style="display: flex; flex-wrap: wrap; gap: 10px">
+              <sc-for list="{{ modes }}" as="m" hint-placeholder-count="3">
+                <button type="button" onClick="{{ m.select }}" style="position: relative; min-height: 46px; padding: 12px 20px; border: 1px solid #C9C2B2; border-radius: 999px; background: #FFFDF8; color: #16201C; font-size: 14.5px; cursor: pointer" style-hover="border-color: #4E7A5E">
+                  <sc-if value="{{ m.on }}"><span style="position: absolute; inset: 0; border: 1px solid #4E7A5E; box-shadow: inset 0 0 0 1px #4E7A5E; background: #EDF1E9; border-radius: 999px; pointer-events: none"></span></sc-if>
+                  <span style="position: relative">{{ m.name }}</span>
+                </button>
+              </sc-for>
+            </div>
+          </div>
+
+          <div style="margin-bottom: 30px">
+            <div style="display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 8px 16px; margin-bottom: 14px">
+              <div style="font-size: 12px; letter-spacing: 0.13em; text-transform: uppercase; color: #6C7A70; font-weight: 600">Step three · Day and time</div>
+              <div style="font-size: 12.5px; color: #6C7A70">{{ tzNote }}</div>
+            </div>
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(74px, 1fr)); gap: 8px; margin-bottom: 16px">
+              <sc-for list="{{ days }}" as="d" hint-placeholder-count="5">
+                <button type="button" onClick="{{ d.select }}" style="position: relative; display: grid; width: 100%; padding: 12px 6px; border: 1px solid #C9C2B2; border-radius: 3px; background: #FFFDF8; color: #16201C; cursor: pointer" style-hover="border-color: #4E7A5E">
+                  <sc-if value="{{ d.on }}"><span style="position: absolute; inset: 0; border: 1px solid #4E7A5E; box-shadow: inset 0 0 0 1px #4E7A5E; background: #EDF1E9; border-radius: 3px; pointer-events: none"></span></sc-if>
+                  <span style="position: relative; display: grid; gap: 2px; justify-items: center; text-align: center">
+                    <span style="font-size: 11.5px; letter-spacing: 0.08em; text-transform: uppercase; color: #6C7A70">{{ d.weekday }}</span>
+                    <span style="font-family: 'Instrument Serif', serif; font-size: 25px; line-height: 1.1">{{ d.date }}</span>
+                    <span style="font-size: 11px; color: #6C7A70">{{ d.month }}</span>
+                  </span>
+                </button>
+              </sc-for>
+            </div>
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(88px, 1fr)); gap: 8px">
+              <sc-for list="{{ slots }}" as="t" hint-placeholder-count="8">
+                <span style="display: grid">
+                  <sc-if value="{{ t.free }}" hint-placeholder-val="{{ true }}">
+                    <button type="button" onClick="{{ t.select }}" style="position: relative; min-height: 46px; padding: 13px 8px; border: 1px solid #C9C2B2; border-radius: 3px; background: #FFFDF8; color: #16201C; font-size: 14px; text-align: center; cursor: pointer" style-hover="border-color: #4E7A5E">
+                      <sc-if value="{{ t.on }}"><span style="position: absolute; inset: 0; border: 1px solid #4E7A5E; box-shadow: inset 0 0 0 1px #4E7A5E; background: #EDF1E9; border-radius: 3px; pointer-events: none"></span></sc-if>
+                      <span style="position: relative">{{ t.label }}</span>
+                    </button>
+                  </sc-if>
+                  <sc-if value="{{ t.taken }}">
+                    <span style="display: grid; place-items: center; min-height: 46px; padding: 13px 8px; border: 1px dashed #DCD5C7; border-radius: 3px; color: #B6BCB4; font-size: 14px; text-decoration: line-through">{{ t.label }}</span>
+                  </sc-if>
+                </span>
+              </sc-for>
+            </div>
+          </div>
+
+          <div style="margin-bottom: 26px">
+            <div style="font-size: 12px; letter-spacing: 0.13em; text-transform: uppercase; color: #6C7A70; margin-bottom: 14px; font-weight: 600">Step four · Your details</div>
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px">
+              <label style="display: grid; gap: 6px; font-size: 13px; color: #4A574F">Full name
+                <input type="text" value="{{ name }}" onChange="{{ setName }}" required="{{ true }}" placeholder="Your full name" style="padding: 13px; border: 1px solid #C9C2B2; border-radius: 3px; background: #FFFDF8; font-size: 16px; color: #16201C; min-width: 0" style-focus="outline: none; border-color: #4E7A5E">
+              </label>
+              <label style="display: grid; gap: 6px; font-size: 13px; color: #4A574F">Email
+                <input type="email" value="{{ email }}" onChange="{{ setEmail }}" required="{{ true }}" placeholder="you@email.com" style="padding: 13px; border: 1px solid #C9C2B2; border-radius: 3px; background: #FFFDF8; font-size: 16px; color: #16201C; min-width: 0" style-focus="outline: none; border-color: #4E7A5E">
+              </label>
+              <label style="display: grid; gap: 6px; font-size: 13px; color: #4A574F">Phone
+                <input type="tel" value="{{ phone }}" onChange="{{ setPhone }}" placeholder="Your phone number" style="padding: 13px; border: 1px solid #C9C2B2; border-radius: 3px; background: #FFFDF8; font-size: 16px; color: #16201C; min-width: 0" style-focus="outline: none; border-color: #4E7A5E">
+              </label>
+              <label style="display: grid; gap: 6px; font-size: 13px; color: #4A574F">Who referred you, if anyone
+                <input type="text" value="{{ referrer }}" onChange="{{ setReferrer }}" placeholder="GP, consultant, or yourself" style="padding: 13px; border: 1px solid #C9C2B2; border-radius: 3px; background: #FFFDF8; font-size: 16px; color: #16201C; min-width: 0" style-focus="outline: none; border-color: #4E7A5E">
+              </label>
+            </div>
+            <label style="display: grid; gap: 6px; font-size: 13px; color: #4A574F; margin-top: 12px">What brings you in?
+              <textarea rows="3" value="{{ notes }}" onChange="{{ setNotes }}" placeholder="Tell me where the pain or injury is, how long it has been going on, and anything you have already tried." style="padding: 13px; border: 1px solid #C9C2B2; border-radius: 3px; background: #FFFDF8; font-size: 16px; color: #16201C; resize: vertical; line-height: 1.5" style-focus="outline: none; border-color: #4E7A5E"></textarea>
+            </label>
+          </div>
+
+          <div style="display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px 20px; padding-top: 22px; border-top: 1px solid #DCD5C7">
+            <div style="flex: 1 1 220px; font-size: 14px; color: #4A574F; line-height: 1.5">{{ summary }}</div>
+            <sc-if value="{{ submitReady }}" hint-placeholder-val="{{ true }}">
+              <button type="submit" style="padding: 15px 28px; border-radius: 999px; border: none; background: #B4562F; color: #FFF8F0; font-size: 15px; font-weight: 500; white-space: nowrap; cursor: pointer" style-hover="background: #16201C">Request session</button>
+            </sc-if>
+            <sc-if value="{{ submitBlocked }}">
+              <button type="submit" disabled="{{ true }}" style="padding: 15px 28px; border-radius: 999px; border: none; background: #DCD5C7; color: #8A9188; font-size: 15px; font-weight: 500; white-space: nowrap; cursor: not-allowed">Request session</button>
+            </sc-if>
+          </div>
+          <p style="margin: 16px 0 0; font-size: 12.5px; color: #8A9188; line-height: 1.5">Requests are confirmed by email within 24 hours. Records are kept in line with GDPR and are never shared without your consent.</p>
+        </form>
+      </sc-if>
+    </div>
+  </div>
+</section>
+
+<footer style="display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 14px 20px; padding: 30px 0 48px; border-top: 1px solid #DCD5C7; font-size: 13px; color: #6C7A70">
+  <div>Virthy Jain · Physiotherapist registered with CORU · Member of the ISCP</div>
+  <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 12px 22px">
+    <a href="https://www.linkedin.com/in/virthy-trilokchand-jain-b86390240/" target="_blank" rel="noopener" style="display: flex; align-items: center; gap: 7px"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M4.98 3.5a2.5 2.5 0 1 1 0 5 2.5 2.5 0 0 1 0-5zM3 9h4v12H3zM9 9h3.8v1.7h.05A4.2 4.2 0 0 1 16.6 8.7c3.2 0 4.4 2 4.4 5.1V21h-4v-6c0-1.5-.5-2.6-1.9-2.6-1.2 0-1.9.8-2.2 1.6-.1.3-.1.7-.1 1V21H9z"></path></svg>LinkedIn</a>
+    <a href="mailto:virtee9808@gmail.com" style="display: flex; align-items: center; gap: 7px"><svg width="15" height="15" viewBox="0 0 24 24" aria-hidden="true"><path fill="#EA4335" d="M2 6.3A2.3 2.3 0 0 1 5.7 4.5L12 9.3l6.3-4.8A2.3 2.3 0 0 1 22 6.3v.9l-10 7.6L2 7.2z"></path><path fill="#C5221F" d="M2 7.2v11.3c0 .7.6 1.3 1.3 1.3H6V9.5z"></path><path fill="#34A853" d="M18 9.5V19.8h2.7c.7 0 1.3-.6 1.3-1.3V7.2z"></path><path fill="#FFFFFF" d="M6 19.8V9.5l6 4.6 6-4.6v10.3z"></path></svg>Gmail</a>
+  </div>
+</footer>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{}">
+class Component extends DCLogic {
+  state = {
+    service: 'Initial assessment', mode: 'Clinic in Dublin', dayIdx: 0, slot: null,
+    name: '', email: '', phone: '', referrer: '', notes: '', booked: false, zone: 'neck',
+    planStep: 0, planZone: null, planStage: null, planGoal: null,
+    confirm: {}
+  };
+
+  services = [
+    { name: 'Initial assessment', duration: '55 minutes' },
+    { name: 'Return visit', duration: '40 minutes' },
+    { name: 'Women\u2019s health', duration: '50 minutes' },
+    { name: 'Sports and return-to-play', duration: '50 minutes' }
+  ];
+  modes = ['Clinic in Dublin', 'Home visit', 'Telehealth'];
+
+  days() {
+    const out = [], base = new Date(2026, 7, 17);
+    for (let i = 0; i < 5; i++) {
+      const d = new Date(base.getTime() + i * 864e5);
+      out.push({
+        weekday: d.toLocaleDateString('en-IE', { weekday: 'short' }),
+        date: String(d.getDate()),
+        month: d.toLocaleDateString('en-IE', { month: 'short' }),
+        full: d.toLocaleDateString('en-IE', { weekday: 'long', day: 'numeric', month: 'long' })
+      });
+    }
+    return out;
+  }
+
+  slotTimes(dayIdx, mode) {
+    const morning = ['08:00', '08:45', '09:30', '10:15', '11:00', '11:45'];
+    const afternoon = ['14:00', '14:45', '15:30', '16:15', '17:00', '17:45'];
+    let times = mode === 'Telehealth' ? morning.concat(['18:30', '19:15']) : morning.concat(afternoon);
+    if (mode === 'Home visit') times = afternoon.concat(['18:30', '19:15']);
+    const taken = [[1, 4], [0, 3, 7], [2, 5], [], [6, 9]][dayIdx] || [];
+    return times.map((t, i) => ({ label: t, disabled: taken.indexOf(i) > -1 }));
+  }
+
+  chip(active, extra) {
+    return Object.assign({
+      padding: '13px 16px', borderRadius: '3px', cursor: 'pointer', textAlign: 'left',
+      fontSize: '14.5px', minHeight: '46px', transition: 'border-color .15s, background .15s',
+      border: active ? '1px solid #4E7A5E' : '1px solid #C9C2B2',
+      background: active ? '#EDF1E9' : '#FFFDF8',
+      color: '#16201C', boxShadow: active ? 'inset 0 0 0 1px #4E7A5E' : 'none'
+    }, extra || {});
+  }
+
+  stages = [
+    { label: 'Under two weeks', line: 'Early days. The priority is settling symptoms and protecting the area while keeping you moving as normally as possible.' },
+    { label: 'Two to six weeks', line: 'Past the acute stage. We can start loading the tissue properly now and rebuild what has been lost.' },
+    { label: 'A few months', line: 'Persistent, which is common and treatable. Progress usually comes from a structured loading plan and better pacing across the week.' },
+    { label: 'Longer than a year', line: 'Long-standing. We set an honest baseline first, then build steadily with a review every four weeks.' }
+  ];
+  goals = ['Walk without pain', 'Get back to sport', 'Lift my child', 'Sleep through the night', 'Return to work', 'Feel steady on my feet'];
+
+  planQuestion(step) {
+    if (step === 0) return 'Where is the problem?';
+    if (step === 1) return 'How long has it been going on?';
+    if (step === 2) return 'What do you want back?';
+    return 'Here is how I would start.';
+  }
+
+  zoneData() {
+    return [
+      { key: 'neck', name: 'Neck and shoulder', tag: 'Musculoskeletal', service: 'Initial assessment',
+        blurb: 'Stiffness that builds over long hours at a desk, pain referring into the arm, a frozen shoulder, or reach overhead that has not come back after an injury.',
+        assess: 'I check cervical range of motion, scapular control and neural tension, then look at how you sit and load the shoulder through an ordinary day.',
+        treat: 'Joint mobilisation, myofascial release and dry needling to settle trigger points, followed by graded loading for the scapular muscles and rotator cuff.',
+        arc: 'Pain often eases within two or three sessions, while the strength work usually runs for six to eight weeks.' },
+      { key: 'back', name: 'Lower back', tag: 'Musculoskeletal', service: 'Initial assessment',
+        blurb: 'Acute mechanical back pain, symptoms travelling into the leg from a disc, and long-standing stiffness that keeps returning.',
+        assess: 'Directional movement testing, hip and trunk control, and a functional look at how much lifting and sitting you can currently tolerate.',
+        treat: 'Spinal mobilisation, education about what pain does and does not mean, breathing and core sequencing, then progressive hinge and carry loading.',
+        arc: 'Most acute episodes settle within three to four weeks, with a maintenance programme to follow.' },
+      { key: 'hip', name: 'Hip and pelvis', tag: 'Musculoskeletal', service: 'Initial assessment',
+        blurb: 'Groin pain, gluteal tendinopathy, and hip stiffness that makes stairs, driving or sleeping on one side difficult.',
+        assess: 'Hip range of motion, tendon load testing, single-leg control, and observation of how you walk.',
+        treat: 'Managing load carefully, isometric work for the tendon, manual therapy, and staged strengthening in standing.',
+        arc: 'Tendon problems need eight to twelve weeks of consistent loading, although comfort tends to improve well before that.' },
+      { key: 'knee', name: 'Knee', tag: 'Post-operative and sports', service: 'Sports and return-to-play',
+        blurb: 'Rehabilitation after ACL reconstruction surgery or arthroscopy, patellofemoral pain, and knees affected by osteoarthritis.',
+        assess: 'Swelling and range of motion, quadriceps activation, and where appropriate the way you hop and land.',
+        treat: 'Early mobilisation, loading for the quadriceps and hamstrings, proprioception work, and return-to-sport testing against clear criteria.',
+        arc: 'Surgical protocols move through phases across twelve to twenty-four weeks.' },
+      { key: 'foot', name: 'Ankle and foot', tag: 'Musculoskeletal', service: 'Return visit',
+        blurb: 'Sprains that never fully settled, pain under the heel, and irritation of the calf tendon.',
+        assess: 'Ankle range of motion, balance testing, calf endurance, and a review of the footwear you spend most time in.',
+        treat: 'Mobilisation, therapeutic taping, loading for the calf and the small muscles of the foot, and a graded return to running.',
+        arc: 'Sprains generally take four to six weeks, and heel pain closer to eight to twelve.' },
+      { key: 'balance', name: 'Dizziness and balance', tag: 'Vestibular', service: 'Initial assessment',
+        blurb: 'Positional vertigo, unsteadiness that lingers after illness, and a rising risk of falls in later life.',
+        assess: 'Positional testing, gaze stability, gait, and standardised balance measures so we have a number to work from.',
+        treat: 'Vestibular rehabilitation protocols, habituation and gaze-stability exercises, and a balance programme you can do at home.',
+        arc: 'Positional vertigo can resolve in one to three sessions, while general deconditioning takes longer.' },
+      { key: 'womens', name: 'Women\u2019s health', tag: 'Women\u2019s health', service: 'Women\u2019s health',
+        blurb: 'Care before and after birth, pelvic floor rehabilitation, and a considered return to exercise once you are ready.',
+        assess: 'Pelvic floor and abdominal function, posture and tolerance to load, discussed privately and entirely at your pace.',
+        treat: 'Pelvic floor retraining, breathing and pressure management, and a graded, step-by-step return to lifting and running.',
+        arc: 'Programmes after birth usually span twelve weeks, with review points along the way.' },
+      { key: 'neuro', name: 'Neurology and recovery', tag: 'Neurological and oncology', service: 'Initial assessment',
+        blurb: 'Rehabilitation after stroke, ongoing neurological conditions, and rebuilding capacity after cancer treatment.',
+        assess: 'Functional mobility, transfers, strength, and how fatigue moves across a normal week.',
+        treat: 'Movement retraining informed by NDT principles, supervised exercise therapy, and steady work on balance and endurance.',
+        arc: 'A longer horizon, reviewed every four weeks against your own baselines rather than anyone else\u2019s.' }
+    ];
+  }
+
+  glyph(key, active) {
+    const c = active ? '#B4562F' : '#6C7A70';
+    const base = { fill: 'none', stroke: c, strokeWidth: 1.5, strokeLinecap: 'round', strokeLinejoin: 'round' };
+    const el = (t, a) => React.createElement(t, Object.assign({}, base, a));
+    const dot = (cx, cy, r) => React.createElement('circle', { key: 'd' + cx + cy, cx: cx, cy: cy, r: r || 1.7, fill: c, stroke: 'none' });
+    const shapes = {
+      neck: [el('path', { key: 1, d: 'M13 4 V9 C13 11 11 12 9 13 L5 15' }), el('path', { key: 2, d: 'M13 9 C15 11 17 12 20 12' }), dot(20, 12, 2.2)],
+      back: [el('path', { key: 1, d: 'M14 3 C11 7 17 9 14 13 C11 17 17 18 14 21' }), el('path', { key: 2, d: 'M9 6 H11 M17 6 H19 M9 11 H11 M17 11 H19 M9 16 H11 M17 16 H19' })],
+      hip: [el('path', { key: 1, d: 'M6 6 C6 12 10 13 14 13 C18 13 22 12 22 6' }), el('path', { key: 2, d: 'M9 13 V20 M19 13 V20' }), dot(14, 9, 2)],
+      knee: [el('path', { key: 1, d: 'M10 3 V9' }), el('path', { key: 2, d: 'M10 15 V21' }), el('circle', { key: 3, cx: 10, cy: 12, r: 3 }), el('path', { key: 4, d: 'M15 12 H21' })],
+      foot: [el('path', { key: 1, d: 'M11 3 V11 C11 16 14 18 19 18' }), el('path', { key: 2, d: 'M8 20 C12 21 17 21 21 20' })],
+      balance: [el('path', { key: 1, d: 'M14 5 C10 5 8 8 8 12 C8 16 11 19 14 19' }), el('path', { key: 2, d: 'M14 9 C12 9 11 10.5 11 12 C11 14 12.5 15 14 15' }), dot(17, 8, 1.6), dot(19, 12, 1.6)],
+      womens: [el('circle', { key: 1, cx: 14, cy: 9, r: 4.6 }), el('path', { key: 2, d: 'M14 14 V21 M10.5 18 H17.5' })],
+      neuro: [el('path', { key: 1, d: 'M14 5 C9 5 7 8 7 11 C7 14 9 15 9 18' }), el('path', { key: 2, d: 'M14 5 C19 5 21 8 21 11 C21 14 19 15 19 18' }), el('path', { key: 3, d: 'M14 5 V18' }), dot(11, 10, 1.5), dot(17, 12, 1.5)]
+    };
+    return React.createElement('svg', { width: 28, height: 24, viewBox: '0 0 28 24', 'aria-hidden': true }, shapes[key]);
+  }
+
+  renderVals() {
+    const s = this.state, days = this.days();
+    const slots = this.slotTimes(s.dayIdx, s.mode);
+    const day = days[s.dayIdx];
+    const ready = s.slot !== null && s.name.trim() && s.email.trim();
+    const when = s.slot !== null ? day.full + ' at ' + s.slot : null;
+    const zones = this.zoneData();
+    const zone = zones.filter(z => z.key === s.zone)[0] || zones[0];
+
+    const planZone = zones.filter(z => z.key === s.planZone)[0] || zones[0];
+    const planStageObj = this.stages.filter(x => x.label === s.planStage)[0] || this.stages[0];
+    const planStage = planStageObj.line + (s.planGoal ? ' We measure progress against the goal you chose: ' + s.planGoal.toLowerCase() + '.' : '');
+    let planChoices = [];
+    if (s.planStep === 0) planChoices = zones.map(z => ({ label: z.name, select: () => this.setState({ planZone: z.key, planStep: 1 }) }));
+    else if (s.planStep === 1) planChoices = this.stages.map(x => ({ label: x.label, select: () => this.setState({ planStage: x.label, planStep: 2 }) }));
+    else if (s.planStep === 2) planChoices = this.goals.map(g => ({ label: g, select: () => this.setState({ planGoal: g, planStep: 3 }) }));
+
+    return {
+      zones: zones.map(z => ({
+        name: z.name,
+        glyph: this.glyph(z.key, z.key === zone.key),
+        on: z.key === zone.key, off: z.key !== zone.key,
+        select: () => this.setState({ zone: z.key })
+      })),
+      zoneTag: zone.tag, zoneTitle: zone.name, zoneBlurb: zone.blurb,
+      zoneAssess: zone.assess, zoneTreat: zone.treat, zoneArc: zone.arc,
+      bookZone: () => {
+        this.setState({ service: zone.service, booked: false });
+        window.scrollTo({ top: document.getElementById('book').offsetTop - 80, behavior: 'smooth' });
+      },
+
+      planDots: [0, 1, 2, 3].map(i => ({ on: i <= s.planStep, off: i > s.planStep })),
+      planHeading: this.planQuestion(s.planStep),
+      planPicking: s.planStep < 3,
+      planDone: s.planStep === 3,
+      planCanGoBack: s.planStep > 0 && s.planStep < 3,
+      planChoices: planChoices,
+      planStage: planStage,
+      planFirst: planZone.assess,
+      planArc: planZone.arc,
+      planService: planZone.service,
+      planBack: () => this.setState({ planStep: s.planStep - 1 }),
+      planReset: () => this.setState({ planStep: 0, planZone: null, planStage: null, planGoal: null }),
+      planBook: () => {
+        const note = planZone.name + '. Going on for ' + (s.planStage || '').toLowerCase() + '. Goal: ' + (s.planGoal || '').toLowerCase() + '.';
+        this.setState({ service: planZone.service, zone: planZone.key, booked: false, notes: s.notes.trim() ? s.notes : note });
+        window.scrollTo({ top: document.getElementById('book').offsetTop - 80, behavior: 'smooth' });
+      },
+
+      roles: this.roles(),
+      competencies: this.competencies(),
+      certifications: [
+        'Dry Needling, Irish Standard', 'Introduction to Vestibular Rehabilitation',
+        'NRX® Soft Splinting for Physiotherapists', 'Therapeutic Taping',
+        'Women\u2019s Health Physiotherapy, prenatal and postnatal rehabilitation',
+        'Labour and Birth Physiotherapy Support', 'Pelvic Floor Rehabilitation',
+        'Stroke Rehabilitation, basic and NDT approach', 'Manual Handling and Rehabilitation Training',
+        'First Aid Certification'
+      ],
+
+      booked: s.booked,
+      formOpen: !s.booked,
+      confirmName: (s.confirm.name || '').split(' ')[0],
+      confirmEmail: s.confirm.email,
+      confirmService: s.confirm.service,
+      confirmMode: s.confirm.mode,
+      confirmWhen: s.confirm.when,
+
+      services: this.services.map(x => ({
+        name: x.name, duration: x.duration,
+        on: s.service === x.name, off: s.service !== x.name,
+        select: () => this.setState({ service: x.name })
+      })),
+      modes: this.modes.map(m => ({
+        name: m,
+        on: s.mode === m, off: s.mode !== m,
+        select: () => this.setState({ mode: m, slot: null })
+      })),
+      days: days.map((d, i) => ({
+        weekday: d.weekday, date: d.date, month: d.month,
+        on: s.dayIdx === i, off: s.dayIdx !== i,
+        select: () => this.setState({ dayIdx: i, slot: null })
+      })),
+      slots: slots.map(t => ({
+        label: t.label, taken: t.disabled, free: !t.disabled,
+        on: !t.disabled && s.slot === t.label,
+        select: () => this.setState({ slot: t.label })
+      })),
+      tzNote: 'All times are Irish Standard Time',
+
+      name: s.name, email: s.email, phone: s.phone, referrer: s.referrer, notes: s.notes,
+      setName: e => this.setState({ name: e.target.value }),
+      setEmail: e => this.setState({ email: e.target.value }),
+      setPhone: e => this.setState({ phone: e.target.value }),
+      setReferrer: e => this.setState({ referrer: e.target.value }),
+      setNotes: e => this.setState({ notes: e.target.value }),
+
+      summary: when ? s.service + ' · ' + s.mode + ' · ' + when : 'Choose a time slot to continue.',
+      submitReady: ready,
+      submitBlocked: !ready,
+      submit: e => {
+        e.preventDefault();
+        if (!ready) return;
+        this.setState({ booked: true, confirm: { name: s.name, email: s.email, service: s.service, mode: s.mode, when } });
+        window.scrollTo({ top: document.getElementById('book').offsetTop - 80, behavior: 'smooth' });
+      },
+      reset: () => this.setState({ booked: false, slot: null, notes: '' })
+    };
+  }
+
+  roles() {
+    return [
+      { dates: 'November 2025 to present', place: 'Dublin, Ireland', title: 'Physiotherapist', org: 'MYPhysio Rehab', points: [
+        'Provide physiotherapy services to HSE patients on a contract basis, managing a varied caseload of musculoskeletal, neurological and post-surgical conditions.',
+        'Deliver musculoskeletal and postoperative rehabilitation under clinical supervision in a busy outpatient practice.',
+        'Apply vestibular rehabilitation protocols and advanced therapeutic taping techniques within individual treatment plans.',
+        'Contribute to treatment planning and goal-setting, and maintain clinical documentation to the standards CORU requires.'
+      ]},
+      { dates: 'December 2024 to March 2025', place: 'Gort, County Galway', title: 'Physiotherapy Intern in Oncology and Cancer Support', org: 'Cancer Support Service', points: [
+        'Delivered supervised exercise therapy and mobility programmes for oncology patients within a community cancer support setting.',
+        'Facilitated balance training and structured strength programmes drawn from current cancer rehabilitation guidelines.',
+        'Supported rehabilitation at home to promote functional independence and quality of life after treatment.'
+      ]},
+      { dates: 'July 2023 to present', place: 'Remote, India', title: 'Online Physiotherapy Consultant', org: 'Arihant Hospital and Research Centre', points: [
+        'Conduct virtual physiotherapy assessments and design individual rehabilitation plans for patients through telehealth platforms.',
+        'Specialise in orthopaedic and postoperative recovery, with a focus on measurable functional outcomes and the progress patients report themselves.',
+        'Monitor and document patient progress within structured clinical frameworks, holding to the same standards as in-person care.'
+      ]},
+      { dates: 'December 2022 to August 2023', place: 'Mumbai, India', title: 'Junior Physiotherapist', org: 'Bombay Hospital', points: [
+        'Managed orthopaedic and neurological caseloads across inpatient and outpatient settings in a busy hospital environment.',
+        'Assisted in critical care and post-surgical rehabilitation, including early mobilisation and respiratory physiotherapy protocols.',
+        'Developed and delivered structured discharge plans and tailored home exercise programmes for a wide range of patients.'
+      ]},
+      { dates: 'January 2022 to December 2022', place: 'India', title: 'Physiotherapist', org: 'Arihant Hospital and Research Centre', points: [
+        'Delivered musculoskeletal and postoperative rehabilitation for a broad range of patient presentations.',
+        'Conducted functional movement assessments and applied pain management and mobility interventions supported by current evidence.'
+      ]},
+      { dates: 'September 2019 to August 2022', place: 'India', title: 'Supervisor and Programme Facilitator', org: 'Disability Rehabilitation Centre', points: [
+        'Coordinated rehabilitation programmes for people with physical and cognitive disabilities, promoting independence and social participation.',
+        'Worked alongside service users, families and supervising therapists to deliver care centred on the person and rooted in the community.'
+      ]}
+    ];
+  }
+
+  competencies() {
+    return [
+      { label: 'Clinical rehabilitation', items: 'Musculoskeletal, orthopaedic, neurological, postoperative, oncology, paediatric, geriatric, sports and community rehabilitation.' },
+      { label: 'Women\u2019s health', items: 'Prenatal and postnatal physiotherapy, pelvic floor rehabilitation, support through labour and birth, and functional rehabilitation for women.' },
+      { label: 'Manual therapy', items: 'Mobilisation and manipulation of the spine and peripheral joints, therapeutic taping, cupping, myofascial release and NRX® soft splinting.' },
+      { label: 'Specialist techniques', items: 'Dry needling to the Irish Standard, vestibular rehabilitation, strength and conditioning, and functional movement assessment.' },
+      { label: 'Clinical practice', items: 'Patient education, exercise prescription, pain management, discharge planning, home programme design and telehealth consultation.' },
+      { label: 'Informatics and administration', items: 'Electronic clinical documentation, monitoring of patient outcomes, health informatics at MSc level, and record-keeping in line with GDPR.' }
+    ];
+  }
+}
+</script>
+</body>
+</html>
