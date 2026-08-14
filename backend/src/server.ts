@@ -66,20 +66,31 @@ export async function buildServer() {
  * expect one, and called directly when this file itself is the entry point.
  */
 export async function start() {
-  // Apply DB migrations on boot (idempotent). SKIP_MIGRATE_ON_BOOT=true opts out.
-  if (process.env.SKIP_MIGRATE_ON_BOOT !== 'true') {
-    await migrate();
-  }
-  // One-time seeding: set SEED_ON_BOOT=true for a single deploy, then remove it.
-  // Non-destructive, so leaving it on won't clobber admin edits.
-  if (process.env.SEED_ON_BOOT === 'true') {
-    const { seedInitialData } = await import('./lib/seed.js');
-    await seedInitialData();
-  }
-
   const app = await buildServer();
+
+  // Listen FIRST so the platform health check passes even if DB init is slow or
+  // failing. A bad DATABASE_URL then shows up as a clear log line instead of
+  // crashing the whole process into a 503.
   await app.listen({ port: config.port, host: '0.0.0.0' });
   app.log.info(`Virthy booking backend on :${config.port} (${config.env})`);
+
+  try {
+    // Apply DB migrations on boot (idempotent). SKIP_MIGRATE_ON_BOOT=true opts out.
+    if (process.env.SKIP_MIGRATE_ON_BOOT !== 'true') {
+      await migrate();
+    }
+    // One-time seeding: set SEED_ON_BOOT=true for a single deploy, then remove it.
+    if (process.env.SEED_ON_BOOT === 'true') {
+      const { seedInitialData } = await import('./lib/seed.js');
+      await seedInitialData();
+    }
+    app.log.info('Database ready.');
+  } catch (e) {
+    app.log.error(
+      { err: e },
+      'DATABASE INIT FAILED — app is up but bookings/admin will error until DATABASE_URL is fixed',
+    );
+  }
 
   // In-process safety net for expiring pending holds every 5 minutes.
   setInterval(() => {
