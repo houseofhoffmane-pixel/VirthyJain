@@ -1,0 +1,12 @@
+# macOS
+.DS_Store
+
+# Node
+node_modules/
+dist/
+*.log
+
+# Secrets & generated — NEVER commit these
+.env
+backend/.env
+backend/outbox/
