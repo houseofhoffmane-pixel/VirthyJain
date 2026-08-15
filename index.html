@@ -36,6 +36,10 @@
   .tag{padding:8px 15px;border-radius:999px;background:#E6E1D5;font-size:12.5px;letter-spacing:0.04em;color:#3D4A42}
   section{border-bottom:1px solid #DCD5C7}
   .slot-taken{display:grid;place-items:center;min-height:46px;padding:13px 8px;border:1px dashed #DCD5C7;border-radius:3px;color:#B6BCB4;font-size:14px;text-decoration:line-through}
+  /* Sidebar only sticks on wide screens; on mobile it must scroll normally,
+     otherwise it pins and overlaps the booking form. */
+  .book-side{position:static}
+  @media(min-width:900px){.book-side{position:sticky;top:92px}}
 </style>
 </head>
 <body>
@@ -153,7 +157,7 @@
 
 <section id="book" style="padding:clamp(56px,8vw,88px) 0 clamp(64px,8vw,96px);border-bottom:none">
   <div style="display:flex;flex-wrap:wrap;gap:clamp(28px,5vw,56px);align-items:flex-start">
-    <div style="flex:1 1 280px;position:sticky;top:92px">
+    <div class="book-side" style="flex:1 1 280px">
       <h2 style="font-size:clamp(32px,4.2vw,40px);line-height:1.05;margin:0 0 16px">Book a physio session</h2>
       <p style="font-size:16.5px;line-height:1.65;color:#4A574F;margin:0 0 26px">Choose a service, a way to meet and a time that suits you. You will receive a confirmation telling you what to wear and what to bring.</p>
       <div id="priceList" style="display:grid;gap:14px;padding-top:22px;border-top:1px solid #DCD5C7;font-size:14.5px;color:#3D4A42"></div>
