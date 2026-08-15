@@ -139,6 +139,22 @@ async function patientRejected(b) {
   );
 }
 
+// --- to patient: cancelled (after it was confirmed) -------------------------
+async function patientCancelled(b) {
+  const body =
+    `<p style="margin:0 0 14px">I'm sorry, ${esc(first(b))} — I've had to cancel this appointment. That time is open again, and I'd be glad to help you find another that suits you.</p>` +
+    detailsCard(b) +
+    (SITE ? button(`${SITE}/#book`, 'Book another time', '#B4562F') : '') +
+    `<p style="margin:14px 0 0;font-size:13.5px;color:#6C7A70">My apologies for the change — just reply to this email if you'd like a hand.</p>`;
+  await send(
+    b.email,
+    'Your appointment has been cancelled',
+    `Hi ${first(b)},\n\nI'm sorry — I've had to cancel your appointment (${b.serviceName} on ${textWhen(b)}). ` +
+      `That time is open again, so please rebook on the site${SITE ? ' (' + SITE + '/#book)' : ''} or reply to this email.\n\n— Virthy Jain Physiotherapy`,
+    shell({ accent: '#B4562F', badge: 'Cancelled', heading: 'Your appointment has been cancelled', bodyHtml: body, preheader: 'Your appointment was cancelled — here\'s how to rebook.' }),
+  );
+}
+
 // --- to Virthy: new request with Accept / Reject ----------------------------
 async function practitionerRequested(b, acceptUrl, rejectUrl) {
   const text =
@@ -165,4 +181,4 @@ async function practitionerRequested(b, acceptUrl, rejectUrl) {
     shell({ accent: '#16201C', badge: 'New request', badgeColor: '#B4562F', heading: 'New booking request', bodyHtml: body, preheader: `${b.name} — ${b.serviceName} on ${prettyWhen(b)}` }));
 }
 
-module.exports = { practitionerRequested, patientRequested, patientConfirmed, patientRejected };
+module.exports = { practitionerRequested, patientRequested, patientConfirmed, patientRejected, patientCancelled };

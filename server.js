@@ -133,6 +133,11 @@ function bookingSummary(b) {
   return `<p style="font-size:15px;line-height:1.6"><b>${esc(b.serviceName)}</b> — ${esc(b.formatName || b.format)}<br>
     ${esc(b.starts_at.slice(0, 16))} (Irish time)<br>${esc(b.name)} · ${esc(b.email)}</p>`;
 }
+function cancelForm(token) {
+  return `<form method="POST" action="/booking/${esc(token)}/cancel" onsubmit="return confirm('Cancel this appointment and email the patient?')" style="margin-top:18px">
+    <button style="background:#16201C;color:#fff;border:none;border-radius:999px;padding:11px 22px;font:inherit;cursor:pointer">Cancel this appointment</button>
+  </form>`;
+}
 
 app.get('/booking/:token/accept', async (req, res) => {
   const existing = store.findByToken(req.params.token);
@@ -144,7 +149,21 @@ app.get('/booking/:token/accept', async (req, res) => {
   const b = store.updateStatus(req.params.token, 'confirmed');
   email.patientConfirmed(b).catch(() => {});
   res.send(resultPage('Confirmed', '<h2 style="color:#4E7A5E">✓ Confirmed</h2>' + bookingSummary(b) +
-    '<p style="font-size:14px;color:#3D4A42">The patient has been emailed a confirmation. The slot stays booked.</p>'));
+    '<p style="font-size:14px;color:#3D4A42">The patient has been emailed a confirmation. The slot stays booked.</p>' +
+    '<p style="font-size:13.5px;color:#6C7A70;margin-top:18px">Need to cancel later? Do it here, or from your bookings list.</p>' +
+    cancelForm(req.params.token)));
+});
+
+// Cancel a confirmed (or pending) booking -> free the slot, email the patient.
+app.post('/booking/:token/cancel', async (req, res) => {
+  const existing = store.findByToken(req.params.token);
+  if (!existing) return res.status(404).send(resultPage('Not found', '<h2>This link is not valid.</h2>'));
+  if (existing.status === 'cancelled' || existing.status === 'rejected')
+    return res.send(resultPage('Already closed', '<h2>This booking is already closed.</h2>' + bookingSummary(existing)));
+  const b = store.updateStatus(req.params.token, 'cancelled');
+  email.patientCancelled(b).catch(() => {});
+  res.send(resultPage('Cancelled', '<h2 style="color:#B4562F">Cancelled</h2>' + bookingSummary(b) +
+    '<p style="font-size:14px;color:#3D4A42">The slot is open again for booking, and the patient has been emailed.</p>'));
 });
 
 app.get('/booking/:token/reject', async (req, res) => {
@@ -163,9 +182,24 @@ app.get('/bookings', (req, res) => {
   if (process.env.ADMIN_PASSWORD && req.query.key !== process.env.ADMIN_PASSWORD)
     return res.status(401).send('Add ?key=YOUR_ADMIN_PASSWORD to the URL.');
   const rows = store.readAll().sort((a, b) => a.starts_at.localeCompare(b.starts_at));
-  res.send(resultPage('Bookings', '<h2>All requests</h2>' + (rows.length ? rows.map((b) =>
-    '<div style="border-bottom:1px solid #eee;padding:8px 0;font-size:14px"><b>' + esc(b.status) + '</b> · ' +
-    esc(b.starts_at.slice(0, 16)) + ' · ' + esc(b.name) + ' · ' + esc(b.serviceName) + '</div>').join('') : '<p>None yet.</p>')));
+  const badge = (s) => {
+    const col = s === 'confirmed' ? '#4E7A5E' : s === 'pending' ? '#B4562F' : '#8A9188';
+    return `<span style="display:inline-block;font-size:11px;font-weight:bold;text-transform:uppercase;letter-spacing:.05em;color:#fff;background:${col};padding:3px 9px;border-radius:999px">${esc(s)}</span>`;
+  };
+  const link = (href, label, col) => `<a href="${href}" style="display:inline-block;font-size:13px;color:#fff;background:${col};padding:7px 13px;border-radius:8px;text-decoration:none;margin-right:6px">${label}</a>`;
+  const cancelBtn = (t) => `<form method="POST" action="/booking/${esc(t)}/cancel" onsubmit="return confirm('Cancel and email the patient?')" style="display:inline"><button style="font-size:13px;color:#fff;background:#16201C;border:none;padding:7px 13px;border-radius:8px;cursor:pointer">Cancel</button></form>`;
+  const body = rows.length ? rows.map((b) => {
+    const actions = b.status === 'pending'
+      ? link(`/booking/${b.token}/accept`, 'Accept', '#4E7A5E') + link(`/booking/${b.token}/reject`, 'Reject', '#B4562F') + cancelBtn(b.token)
+      : b.status === 'confirmed' ? cancelBtn(b.token) : '';
+    return `<div style="border-bottom:1px solid #E4DED1;padding:12px 0">
+      <div style="display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap">
+        <div style="font-size:14px"><b>${esc(b.starts_at.slice(0, 16))}</b> · ${esc(b.serviceName)}<br>
+          <span style="color:#6C7A70;font-size:13px">${esc(b.name)} · ${esc(b.email)} · ${esc(b.formatName || b.format)}</span></div>
+        <div>${badge(b.status)}</div></div>
+      ${actions ? `<div style="margin-top:8px">${actions}</div>` : ''}</div>`;
+  }).join('') : '<p>No requests yet.</p>';
+  res.send(resultPage('Bookings', '<h2>Bookings</h2>' + body));
 });
 
 // --- front end + assets -----------------------------------------------------
