@@ -106,7 +106,8 @@ app.post('/api/bookings', async (req, res) => {
   const token = crypto.randomBytes(24).toString('hex');
   const booking = {
     token, status: 'pending', serviceId: service.id, serviceName: service.name,
-    format: format.key, formatName: format.name, starts_at: b.start, ends_at: endStr,
+    durationMinutes: service.duration, format: format.key, formatName: format.name,
+    starts_at: b.start, ends_at: endStr,
     name: String(b.name).trim(), email: String(b.email).trim(),
     phone: b.phone || '', referrer: b.referrer || '', notes: b.notes || '',
     created_at: new Date().toISOString(),
@@ -115,10 +116,8 @@ app.post('/api/bookings', async (req, res) => {
 
   const acceptUrl = `${PUBLIC_URL}/booking/${token}/accept`;
   const rejectUrl = `${PUBLIC_URL}/booking/${token}/reject`;
-  // email.js uses `format` for its display -> pass the display name.
-  const forEmail = Object.assign({}, booking, { format: format.name });
   try {
-    await Promise.all([email.practitionerRequested(forEmail, acceptUrl, rejectUrl), email.patientRequested(forEmail)]);
+    await Promise.all([email.practitionerRequested(booking, acceptUrl, rejectUrl), email.patientRequested(booking)]);
   } catch (e) { console.error('email error:', e.message); }
   console.log('BOOKING REQUEST:', JSON.stringify(booking));
   res.status(201).json({ ok: true, status: 'pending' });
