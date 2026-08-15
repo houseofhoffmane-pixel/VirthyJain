@@ -195,7 +195,7 @@ app.get('/bookings', (req, res) => {
     return `<div style="border-bottom:1px solid #E4DED1;padding:12px 0">
       <div style="display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap">
         <div style="font-size:14px"><b>${esc(b.starts_at.slice(0, 16))}</b> · ${esc(b.serviceName)}<br>
-          <span style="color:#6C7A70;font-size:13px">${esc(b.name)} · ${esc(b.email)} · ${esc(b.formatName || b.format)}</span></div>
+          <span style="color:#6C7A70;font-size:13px">${esc(b.name)} · ${esc(b.email)}${b.phone ? ' · ' + esc(b.phone) : ''} · ${esc(b.formatName || b.format)}</span></div>
         <div>${badge(b.status)}</div></div>
       ${actions ? `<div style="margin-top:8px">${actions}</div>` : ''}</div>`;
   }).join('') : '<p>No requests yet.</p>';
