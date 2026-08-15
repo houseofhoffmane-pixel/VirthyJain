@@ -365,13 +365,28 @@ function renderPlan(){
 }
 
 // ===================== ZONE MAP =====================
-function zoneGlyph(active){ var c=active?'#B4562F':'#6C7A70'; return '<svg width="28" height="24" viewBox="0 0 28 24" aria-hidden="true"><circle cx="14" cy="9" r="4.6" fill="none" stroke="'+c+'" stroke-width="1.5"/><path d="M14 14 V21 M10.5 18 H17.5" fill="none" stroke="'+c+'" stroke-width="1.5" stroke-linecap="round"/></svg>'; }
+function zoneGlyph(key, active){
+  var c = active ? '#B4562F' : '#6C7A70';
+  var s = 'fill="none" stroke="'+c+'" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"';
+  var dot = function(cx,cy,r){ return '<circle cx="'+cx+'" cy="'+cy+'" r="'+(r||1.7)+'" fill="'+c+'"/>'; };
+  var shapes = {
+    neck:    '<path '+s+' d="M13 4 V9 C13 11 11 12 9 13 L5 15"/><path '+s+' d="M13 9 C15 11 17 12 20 12"/>'+dot(20,12,2.2),
+    back:    '<path '+s+' d="M14 3 C11 7 17 9 14 13 C11 17 17 18 14 21"/><path '+s+' d="M9 6 H11 M17 6 H19 M9 11 H11 M17 11 H19 M9 16 H11 M17 16 H19"/>',
+    hip:     '<path '+s+' d="M6 6 C6 12 10 13 14 13 C18 13 22 12 22 6"/><path '+s+' d="M9 13 V20 M19 13 V20"/>'+dot(14,9,2),
+    knee:    '<path '+s+' d="M10 3 V9"/><path '+s+' d="M10 15 V21"/><circle '+s+' cx="10" cy="12" r="3"/><path '+s+' d="M15 12 H21"/>',
+    foot:    '<path '+s+' d="M11 3 V11 C11 16 14 18 19 18"/><path '+s+' d="M8 20 C12 21 17 21 21 20"/>',
+    balance: '<path '+s+' d="M14 5 C10 5 8 8 8 12 C8 16 11 19 14 19"/><path '+s+' d="M14 9 C12 9 11 10.5 11 12 C11 14 12.5 15 14 15"/>'+dot(17,8,1.6)+dot(19,12,1.6),
+    womens:  '<circle '+s+' cx="14" cy="9" r="4.6"/><path '+s+' d="M14 14 V21 M10.5 18 H17.5"/>',
+    neuro:   '<path '+s+' d="M14 5 C9 5 7 8 7 11 C7 14 9 15 9 18"/><path '+s+' d="M14 5 C19 5 21 8 21 11 C21 14 19 15 19 18"/><path '+s+' d="M14 5 V18"/>'+dot(11,10,1.5)+dot(17,12,1.5)
+  };
+  return '<svg width="28" height="24" viewBox="0 0 28 24" aria-hidden="true">'+(shapes[key]||'')+'</svg>';
+}
 function renderZones(){
   var wrap = el('zoneButtons');
   wrap.innerHTML = ZONES.map(function(z){
     var on = z.key===state.zone;
     return '<button type="button" class="chip'+(on?' on':'')+'" data-zone="'+z.key+'" style="min-height:92px;gap:10px">'
-      + '<span style="display:grid;gap:10px;align-content:start">'+zoneGlyph(on)+'<span style="font-size:14.5px;line-height:1.3">'+esc(z.name)+'</span></span></button>';
+      + '<span style="display:grid;gap:10px;align-content:start">'+zoneGlyph(z.key, on)+'<span style="font-size:14.5px;line-height:1.3">'+esc(z.name)+'</span></span></button>';
   }).join('');
   Array.prototype.forEach.call(wrap.querySelectorAll('[data-zone]'), function(b){ b.onclick=function(){ state.zone=b.getAttribute('data-zone'); renderZones(); }; });
   var z = ZONES.filter(function(x){return x.key===state.zone;})[0] || ZONES[0];
