@@ -176,6 +176,7 @@
     <div style="flex:2 1 460px;min-width:0">
       <div id="bookedPanel" style="display:none"></div>
       <form id="bookForm" style="border:1px solid #DCD5C7;background:#F7F4EE;padding:clamp(24px,3.4vw,36px) clamp(20px,3vw,34px)">
+        <div id="acctBar" style="margin-bottom:26px;padding:14px 16px;border:1px solid #DCD5C7;border-radius:6px;background:#FFFDF8;font-size:14px;color:#3D4A42"></div>
         <div style="margin-bottom:30px">
           <div class="kicker" style="margin-bottom:14px">Step one · Service</div>
           <div id="serviceButtons" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px"></div>
@@ -481,10 +482,18 @@ function renderSlots(){
 function updateSummary(){
   var svc = state.services.filter(function(s){return s.id===state.serviceId;})[0];
   var fmt = FORMATS.filter(function(f){return f.key===state.format;})[0];
-  var ready = state.slotStart && el('f_name').value.trim() && el('f_email').value.trim();
-  el('submitBtn').disabled = !ready;
-  el('submitBtn').style.opacity = ready ? '1' : '0.55';
-  el('submitBtn').style.cursor = ready ? 'pointer' : 'not-allowed';
+  if(!state.user){
+    el('submitBtn').disabled = false;
+    el('submitBtn').textContent = 'Sign in to book';
+    el('submitBtn').style.opacity = '1';
+    el('submitBtn').style.cursor = 'pointer';
+  } else {
+    el('submitBtn').textContent = 'Request session';
+    var ready = state.slotStart && el('f_name').value.trim() && el('f_email').value.trim();
+    el('submitBtn').disabled = !ready;
+    el('submitBtn').style.opacity = ready ? '1' : '0.55';
+    el('submitBtn').style.cursor = ready ? 'pointer' : 'not-allowed';
+  }
   if(state.slotStart && svc){
     var p = fmtDayParts(state.dayDate);
     el('summary').textContent = svc.name + ' · ' + (fmt?fmt.name:'') + ' · ' + p.full + ' at ' + state.slotStart.slice(11,16);
@@ -528,6 +537,7 @@ function showBooked(info){
 function submitBooking(e){
   e.preventDefault();
   el('formError').textContent='';
+  if(!state.user){ openAuth('signin'); return; }
   if(!state.slotStart){ el('formError').textContent='Please choose a time slot.'; return; }
   var svc = state.services.filter(function(s){return s.id===state.serviceId;})[0];
   var fmt = FORMATS.filter(function(f){return f.key===state.format;})[0];
@@ -551,6 +561,8 @@ function submitBooking(e){
       } else if(res.status===429){
         el('formError').textContent='Too many requests just now. Please try again in a little while.';
         updateSummary();
+      } else if(res.status===401){
+        state.user=null; renderAccount(); openAuth('signin');
       } else {
         el('formError').textContent=(res.body && res.body.error) ? ('Could not book: '+res.body.error) : 'Something went wrong. Please try again.';
         updateSummary();
@@ -558,6 +570,96 @@ function submitBooking(e){
     })
     .catch(function(){ el('submitBtn').textContent='Request session'; el('formError').textContent='Network error. Please try again.'; updateSummary(); });
 }
+
+// ---- accounts / auth -------------------------------------------------------
+function renderAccount(){
+  var bar = el('acctBar');
+  if(state.user){
+    bar.innerHTML = '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">'
+      + '<span>Booking as <b>'+esc(state.user.name)+'</b> · '+esc(state.user.email)+'</span>'
+      + '<span><button type="button" onclick="openMy()" style="background:none;border:none;color:#B4562F;cursor:pointer;font:inherit;text-decoration:underline">My bookings</button> &nbsp;·&nbsp; '
+      + '<button type="button" onclick="doLogout()" style="background:none;border:none;color:#6C7A70;cursor:pointer;font:inherit">Sign out</button></span></div>';
+    el('f_name').value = state.user.name; el('f_name').readOnly = true;
+    el('f_email').value = state.user.email; el('f_email').readOnly = true;
+    if(state.user.phone) el('f_phone').value = state.user.phone;
+  } else {
+    bar.innerHTML = '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">'
+      + '<span>Please sign in or create an account to book.</span>'
+      + '<span style="display:flex;gap:8px"><button type="button" onclick="openAuth(\'signin\')" class="pill" style="min-height:auto;padding:8px 16px">Sign in</button>'
+      + '<button type="button" onclick="openAuth(\'register\')" class="btn-primary" style="padding:9px 16px">Create account</button></span></div>';
+    el('f_name').readOnly = false; el('f_email').readOnly = false;
+  }
+  updateSummary();
+}
+function loadMe(){ return api('/api/me').then(function(r){ state.user = (r.body && r.body.user) || null; renderAccount(); }).catch(function(){ renderAccount(); }); }
+
+function openAuth(mode){ state.authMode = mode||'signin'; renderAuth(); el('authModal').style.display='block'; }
+function closeAuth(){ el('authModal').style.display='none'; }
+function authErr(msg, ok){ var e=el('authError'); e.style.color = ok?'#4E7A5E':'#B4562F'; e.textContent=msg||''; }
+function renderAuth(){
+  var m = state.authMode, body = el('authBody'), sw = el('authSwitch');
+  authErr('');
+  var f = 'padding:12px;border:1px solid #C9C2B2;border-radius:8px;font:inherit;width:100%;box-sizing:border-box';
+  if(m==='register'){
+    el('authTitle').textContent = 'Create account';
+    body.innerHTML = '<div style="display:grid;gap:10px">'
+      + '<input id="rg_name" type="text" placeholder="Full name" style="'+f+'">'
+      + '<input id="rg_email" type="email" placeholder="Email" style="'+f+'">'
+      + '<input id="rg_phone" type="tel" placeholder="Phone" style="'+f+'">'
+      + '<div style="display:flex;gap:10px"><select id="rg_gender" style="'+f+'"><option value="">Gender</option><option>Female</option><option>Male</option><option>Non-binary</option><option>Prefer not to say</option></select>'
+      + '<input id="rg_age" type="number" min="0" max="120" placeholder="Age" style="'+f+'"></div>'
+      + '<input id="rg_pass" type="password" placeholder="Password (min 6 characters)" style="'+f+'">'
+      + '<button type="button" onclick="doRegister()" class="btn-primary" style="width:100%">Create account</button></div>';
+    sw.innerHTML = 'Already have an account? <button type="button" onclick="openAuth(\'signin\')" style="background:none;border:none;color:#B4562F;cursor:pointer;font:inherit;text-decoration:underline">Sign in</button>';
+  } else if(m==='forgot'){
+    el('authTitle').textContent = 'Reset password';
+    body.innerHTML = '<div style="display:grid;gap:10px"><p style="margin:0;font-size:14px;color:#4A574F">Enter your email and a reset link will be sent.</p>'
+      + '<input id="fg_email" type="email" placeholder="Email" style="'+f+'">'
+      + '<button type="button" onclick="doForgot()" class="btn-primary" style="width:100%">Send reset link</button></div>';
+    sw.innerHTML = '<button type="button" onclick="openAuth(\'signin\')" style="background:none;border:none;color:#B4562F;cursor:pointer;font:inherit;text-decoration:underline">Back to sign in</button>';
+  } else {
+    el('authTitle').textContent = 'Sign in';
+    body.innerHTML = '<div style="display:grid;gap:10px">'
+      + '<input id="li_email" type="email" placeholder="Email" style="'+f+'">'
+      + '<input id="li_pass" type="password" placeholder="Password" style="'+f+'">'
+      + '<button type="button" onclick="doLogin()" class="btn-primary" style="width:100%">Sign in</button>'
+      + '<button type="button" onclick="openAuth(\'forgot\')" style="background:none;border:none;color:#6C7A70;cursor:pointer;font:inherit;text-decoration:underline;font-size:13px;justify-self:start">Forgot password?</button></div>';
+    sw.innerHTML = 'New here? <button type="button" onclick="openAuth(\'register\')" style="background:none;border:none;color:#B4562F;cursor:pointer;font:inherit;text-decoration:underline">Create an account</button>';
+  }
+}
+function postJSON(path, data){ return api(path, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(data) }); }
+function doLogin(){
+  postJSON('/api/login', { email:el('li_email').value, password:el('li_pass').value }).then(function(r){
+    if(r.ok){ state.user=r.body.user; closeAuth(); renderAccount(); } else { authErr((r.body&&r.body.message)||'Could not sign in.'); }
+  }).catch(function(){ authErr('Network error. Please try again.'); });
+}
+function doRegister(){
+  postJSON('/api/register', { name:el('rg_name').value, email:el('rg_email').value, phone:el('rg_phone').value, gender:el('rg_gender').value, age:el('rg_age').value, password:el('rg_pass').value }).then(function(r){
+    if(r.ok){ state.user=r.body.user; closeAuth(); renderAccount(); } else { authErr((r.body&&r.body.message)||'Could not create account.'); }
+  }).catch(function(){ authErr('Network error. Please try again.'); });
+}
+function doForgot(){
+  postJSON('/api/forgot', { email:el('fg_email').value }).then(function(r){
+    authErr((r.body&&r.body.message)||'If that email is registered, a reset link is on its way.', true);
+  }).catch(function(){ authErr('Network error. Please try again.'); });
+}
+function doLogout(){ postJSON('/api/logout', {}).then(function(){ state.user=null; el('f_name').value=''; el('f_email').value=''; el('f_phone').value=''; renderAccount(); }); }
+function openMy(){
+  el('myModal').style.display='block'; el('myList').innerHTML='<p style="color:#6C7A70">Loading…</p>';
+  api('/api/my-bookings').then(function(r){
+    if(!r.ok){ el('myList').innerHTML='<p>Please sign in to see your bookings.</p>'; return; }
+    var bs=(r.body&&r.body.bookings)||[];
+    if(!bs.length){ el('myList').innerHTML='<p style="color:#6C7A70">You have no bookings yet.</p>'; return; }
+    el('myList').innerHTML = bs.map(function(b){
+      var col=b.status==='confirmed'?'#4E7A5E':b.status==='pending'?'#B4562F':'#8A9188';
+      var label=b.status==='pending'?'Awaiting confirmation':b.status==='confirmed'?'Confirmed':b.status==='cancelled'?'Cancelled':b.status==='rejected'?'Not available':b.status;
+      return '<div style="border-bottom:1px solid #E4DED1;padding:12px 0;display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap">'
+        + '<div><b>'+esc(b.starts_at.slice(0,16))+'</b><br><span style="color:#6C7A70;font-size:13px">'+esc(b.serviceName)+' · '+esc(b.formatName)+'</span></div>'
+        + '<span style="align-self:center;font-size:12px;font-weight:600;color:#fff;background:'+col+';padding:3px 10px;border-radius:999px">'+esc(label)+'</span></div>';
+    }).join('');
+  }).catch(function(){ el('myList').innerHTML='<p style="color:#B4562F">Could not load your bookings.</p>'; });
+}
+function closeMy(){ el('myModal').style.display='none'; }
 
 // --- init -------------------------------------------------------------------
 renderPlan();
@@ -567,10 +669,37 @@ renderExpertise();
 renderFormats();
 ['f_name','f_email'].forEach(function(id){ el(id).addEventListener('input', updateSummary); });
 el('bookForm').addEventListener('submit', submitBooking);
+renderAccount();
+loadMe();
 loadServices().then(loadAvailability).catch(function(){
   // Fallback so services still show if the API is briefly unavailable.
   el('serviceButtons').innerHTML='<div style="font-size:14px;color:#B4562F">Could not load services. Refresh to try again.</div>';
 });
 </script>
+
+<!-- Auth modal -->
+<div id="authModal" style="display:none;position:fixed;inset:0;z-index:100;background:rgba(22,32,28,.55);padding:20px;overflow:auto">
+  <div style="max-width:420px;margin:40px auto;background:#FFFDF8;border:1px solid #DCD5C7;border-radius:14px;padding:24px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+      <div class="serif" id="authTitle" style="font-size:23px">Sign in</div>
+      <button type="button" onclick="closeAuth()" style="border:none;background:none;font-size:24px;line-height:1;cursor:pointer;color:#6C7A70">&times;</button>
+    </div>
+    <div id="authError" style="font-size:13.5px;margin-bottom:10px;min-height:1px"></div>
+    <div id="authBody"></div>
+    <div id="authSwitch" style="margin-top:16px;font-size:13.5px;color:#6C7A70"></div>
+  </div>
+</div>
+
+<!-- My bookings modal -->
+<div id="myModal" style="display:none;position:fixed;inset:0;z-index:100;background:rgba(22,32,28,.55);padding:20px;overflow:auto">
+  <div style="max-width:520px;margin:40px auto;background:#FFFDF8;border:1px solid #DCD5C7;border-radius:14px;padding:24px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+      <div class="serif" style="font-size:23px">My bookings</div>
+      <button type="button" onclick="closeMy()" style="border:none;background:none;font-size:24px;line-height:1;cursor:pointer;color:#6C7A70">&times;</button>
+    </div>
+    <div id="myList"></div>
+  </div>
+</div>
+
 </body>
 </html>

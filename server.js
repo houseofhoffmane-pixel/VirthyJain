@@ -14,6 +14,7 @@ const config = require('./config');
 const A = require('./availability');
 const email = require('./email');
 const store = require('./store');
+const users = require('./users');
 
 const app = express();
 app.use(express.json());
@@ -47,6 +48,83 @@ function rateLimited(key, max, windowMs) {
 function activeForAvailability() {
   return store.activeBookings().map((b) => ({ starts_at: b.starts_at, ends_at: b.ends_at, format: b.format }));
 }
+
+// --- sessions (signed cookie, no session store) -----------------------------
+const SESSION_SECRET = process.env.SESSION_SECRET || 'dev-insecure-session-secret-change-me';
+const COOKIE = 'virthy_session';
+const SESSION_MS = 30 * 24 * 3600e3;
+function sign(s) { return crypto.createHmac('sha256', SESSION_SECRET).update(s).digest('base64url'); }
+function setSession(res, userEmail) {
+  const body = Buffer.from(userEmail.toLowerCase() + '|' + Date.now()).toString('base64url');
+  res.cookie(COOKIE, body + '.' + sign(body), {
+    httpOnly: true, sameSite: 'lax', secure: process.env.NODE_ENV === 'production', maxAge: SESSION_MS, path: '/',
+  });
+}
+function clearSession(res) { res.clearCookie(COOKIE, { path: '/' }); }
+function getCookie(req, name) {
+  const m = (req.headers.cookie || '').match(new RegExp('(?:^|;\\s*)' + name + '=([^;]*)'));
+  return m ? decodeURIComponent(m[1]) : null;
+}
+function sessionEmail(req) {
+  const raw = getCookie(req, COOKIE);
+  if (!raw) return null;
+  const dot = raw.lastIndexOf('.');
+  if (dot < 0) return null;
+  const body = raw.slice(0, dot), sig = raw.slice(dot + 1), expected = sign(body);
+  if (sig.length !== expected.length || !crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(expected))) return null;
+  let dec;
+  try { dec = Buffer.from(body, 'base64url').toString(); } catch (e) { return null; }
+  const i = dec.indexOf('|');
+  const em = dec.slice(0, i), issued = Number(dec.slice(i + 1));
+  if (!em || !issued || Date.now() - issued > SESSION_MS) return null;
+  return em;
+}
+function currentUser(req) { const em = sessionEmail(req); return em ? users.findByEmail(em) : null; }
+
+// --- auth API ---------------------------------------------------------------
+app.post('/api/register', (req, res) => {
+  const b = req.body || {};
+  const em = String(b.email || '').trim().toLowerCase();
+  if (!b.name || !em || !b.password) return res.status(400).json({ error: 'missing_fields', message: 'Name, email and password are required.' });
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(em)) return res.status(400).json({ error: 'bad_email', message: 'Please enter a valid email.' });
+  if (String(b.password).length < 6) return res.status(400).json({ error: 'weak_password', message: 'Password must be at least 6 characters.' });
+  if (users.findByEmail(em)) return res.status(409).json({ error: 'email_taken', message: 'An account with that email already exists — try signing in.' });
+  const u = users.create({ name: b.name, email: em, phone: b.phone, gender: b.gender, age: b.age, password: b.password });
+  setSession(res, em);
+  res.status(201).json({ ok: true, user: users.publicUser(u) });
+});
+
+app.post('/api/login', (req, res) => {
+  const b = req.body || {};
+  const ip = (req.headers['x-forwarded-for'] || req.ip || '').toString().split(',')[0];
+  if (rateLimited('login:' + ip, 20, 3600e3)) return res.status(429).json({ error: 'rate_limited', message: 'Too many attempts — try again later.' });
+  const u = users.verify(b.email, b.password || '');
+  if (!u) return res.status(401).json({ error: 'invalid_credentials', message: 'Wrong email or password.' });
+  setSession(res, u.email);
+  res.json({ ok: true, user: users.publicUser(u) });
+});
+
+app.post('/api/logout', (req, res) => { clearSession(res); res.json({ ok: true }); });
+app.get('/api/me', (req, res) => res.json({ user: users.publicUser(currentUser(req)) }));
+
+app.post('/api/forgot', (req, res) => {
+  const ip = (req.headers['x-forwarded-for'] || req.ip || '').toString().split(',')[0];
+  if (rateLimited('forgot:' + ip, 10, 3600e3)) return res.status(429).json({ error: 'rate_limited' });
+  const u = users.setReset(req.body && req.body.email); // null if not a registered email
+  if (u) { email.passwordReset(u, `${PUBLIC_URL}/reset?token=${u.resetToken}`).catch(() => {}); }
+  // Generic response either way (don't reveal whether an email is registered).
+  res.json({ ok: true, message: 'If that email is registered, a reset link is on its way.' });
+});
+
+app.get('/api/my-bookings', (req, res) => {
+  const user = currentUser(req);
+  if (!user) return res.status(401).json({ error: 'login_required' });
+  const mine = store.readAll()
+    .filter((b) => b.email === user.email)
+    .sort((a, b) => b.starts_at.localeCompare(a.starts_at))
+    .map((b) => ({ serviceName: b.serviceName, formatName: b.formatName || b.format, starts_at: b.starts_at, status: b.status }));
+  res.json({ bookings: mine });
+});
 
 app.get('/health', (_req, res) => res.json({ ok: true, store: store.FILE }));
 
@@ -82,16 +160,20 @@ function nextFree(service, formatKey, count = 3) {
 app.post('/api/bookings', async (req, res) => {
   const b = req.body || {};
   if (b.website) return res.status(202).json({ ok: true }); // honeypot
+
+  // Must be signed in — the account is the patient's identity.
+  const user = currentUser(req);
+  if (!user) return res.status(401).json({ error: 'login_required', message: 'Please sign in or create an account to book.' });
+
   const ip = (req.headers['x-forwarded-for'] || req.ip || '').toString().split(',')[0];
   if (rateLimited('ip:' + ip, 10, 3600e3)) return res.status(429).json({ error: 'rate_limited' });
 
   const service = serviceById(b.serviceId);
   const format = formatByKey(b.format);
   if (!service || !format) return res.status(400).json({ error: 'unknown_service_or_format' });
-  if (!b.name || !b.email) return res.status(400).json({ error: 'name_and_email_required' });
   if (!/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(b.start || ''))
     return res.status(400).json({ error: 'bad_start' });
-  if (rateLimited('email:' + String(b.email).toLowerCase(), 5, 24 * 3600e3))
+  if (rateLimited('email:' + user.email, 5, 24 * 3600e3))
     return res.status(429).json({ error: 'rate_limited' });
 
   // Re-check the slot against current bookings (synchronous = no race here).
@@ -108,8 +190,10 @@ app.post('/api/bookings', async (req, res) => {
     token, status: 'pending', serviceId: service.id, serviceName: service.name,
     durationMinutes: service.duration, format: format.key, formatName: format.name,
     starts_at: b.start, ends_at: endStr,
-    name: String(b.name).trim(), email: String(b.email).trim(),
-    phone: b.phone || '', referrer: b.referrer || '', notes: b.notes || '',
+    // Identity comes from the signed-in account, not the request body.
+    name: user.name, email: user.email, phone: user.phone || b.phone || '',
+    gender: user.gender || '', age: user.age || '',
+    referrer: b.referrer || '', notes: b.notes || '',
     created_at: new Date().toISOString(),
   };
   store.add(booking);
@@ -177,6 +261,53 @@ app.get('/booking/:token/reject', async (req, res) => {
     '<p style="font-size:14px;color:#3D4A42">The slot is open again for booking, and the patient has been emailed.</p>'));
 });
 
+// Reschedule (change the time) -> updates the booking and emails the patient.
+app.post('/booking/:token/reschedule', async (req, res) => {
+  const existing = store.findByToken(req.params.token);
+  if (!existing) return res.status(404).send(resultPage('Not found', '<h2>This link is not valid.</h2>'));
+  const local = String((req.body && req.body.datetime) || '');
+  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(local))
+    return res.send(resultPage('Invalid', '<h2>Please pick a valid date and time.</h2>'));
+  const date = local.slice(0, 10), hm = local.slice(11, 16);
+  const list = store.readAll();
+  const b = list.find((x) => x.token === existing.token);
+  b.starts_at = `${date} ${hm}:00`;
+  b.ends_at = `${date} ${A.toHM(A.toMin(hm) + (b.durationMinutes || 45))}:00`;
+  b.status = 'confirmed';
+  b.updated_at = new Date().toISOString();
+  store.writeAll(list);
+  email.patientRescheduled(b).catch(() => {});
+  res.send(resultPage('Time updated', '<h2 style="color:#4E7A5E">Time updated</h2>' + bookingSummary(b) +
+    '<p style="font-size:14px;color:#3D4A42">The patient has been emailed the new time.</p>'));
+});
+
+// --- password reset pages ---------------------------------------------------
+function resetPage(errorMsg, token) {
+  const err = errorMsg ? `<div style="background:#F7E4DE;border:1px solid #B4562F;color:#8a3f22;padding:10px 12px;border-radius:8px;margin-bottom:14px;font-size:14px">${esc(errorMsg)}</div>` : '';
+  if (!token) {
+    return resultPage('Reset password', `<h2>Reset your password</h2>${err}<p style="font-size:14px;color:#3D4A42">Please request a new reset link from the sign-in screen.</p><p><a href="/#book">Back to the site</a></p>`);
+  }
+  return resultPage('Reset password', `<h2>Choose a new password</h2>${err}
+    <form method="POST" action="/reset" style="display:grid;gap:12px;margin-top:8px">
+      <input type="hidden" name="token" value="${esc(token)}">
+      <input type="password" name="password" placeholder="New password (min 6 characters)" required minlength="6" style="padding:12px;border:1px solid #C9C2B2;border-radius:8px;font:inherit">
+      <button style="background:#B4562F;color:#fff;border:none;border-radius:999px;padding:12px;font:inherit;cursor:pointer">Set new password</button>
+    </form>`);
+}
+app.get('/reset', (req, res) => {
+  const token = String(req.query.token || '');
+  res.type('text/html').send(users.tokenValid(token) ? resetPage(null, token) : resetPage('This reset link is invalid or has expired.', null));
+});
+app.post('/reset', (req, res) => {
+  const { token, password } = req.body || {};
+  res.type('text/html');
+  if (!password || String(password).length < 6) return res.send(resetPage('Password must be at least 6 characters.', token));
+  const u = users.resetPassword(token, password);
+  if (!u) return res.send(resetPage('This reset link is invalid or has expired.', null));
+  setSession(res, u.email);
+  res.send(resultPage('Password updated', '<h2 style="color:#4E7A5E">Password updated</h2><p style="font-size:15px">You\'re signed in with your new password.</p><p style="margin-top:14px"><a href="/#book" style="background:#16201C;color:#fff;text-decoration:none;padding:11px 20px;border-radius:999px">Back to the site</a></p>'));
+});
+
 // --- optional: a simple read-only list of requests --------------------------
 app.get('/bookings', (req, res) => {
   if (process.env.ADMIN_PASSWORD && req.query.key !== process.env.ADMIN_PASSWORD)
@@ -188,10 +319,11 @@ app.get('/bookings', (req, res) => {
   };
   const link = (href, label, col) => `<a href="${href}" style="display:inline-block;font-size:13px;color:#fff;background:${col};padding:7px 13px;border-radius:8px;text-decoration:none;margin-right:6px">${label}</a>`;
   const cancelBtn = (t) => `<form method="POST" action="/booking/${esc(t)}/cancel" onsubmit="return confirm('Cancel and email the patient?')" style="display:inline"><button style="font-size:13px;color:#fff;background:#16201C;border:none;padding:7px 13px;border-radius:8px;cursor:pointer">Cancel</button></form>`;
+  const reBtn = (t) => `<form method="POST" action="/booking/${esc(t)}/reschedule" style="display:inline-flex;gap:4px;align-items:center;margin-left:6px"><input type="datetime-local" name="datetime" required style="font-size:12px;padding:4px;border:1px solid #ccc;border-radius:6px"><button style="font-size:13px;color:#16201C;background:#fff;border:1px solid #999;padding:6px 11px;border-radius:8px;cursor:pointer">Change time</button></form>`;
   const body = rows.length ? rows.map((b) => {
     const actions = b.status === 'pending'
-      ? link(`/booking/${b.token}/accept`, 'Accept', '#4E7A5E') + link(`/booking/${b.token}/reject`, 'Reject', '#B4562F') + cancelBtn(b.token)
-      : b.status === 'confirmed' ? cancelBtn(b.token) : '';
+      ? link(`/booking/${b.token}/accept`, 'Accept', '#4E7A5E') + link(`/booking/${b.token}/reject`, 'Reject', '#B4562F') + cancelBtn(b.token) + reBtn(b.token)
+      : b.status === 'confirmed' ? cancelBtn(b.token) + reBtn(b.token) : '';
     return `<div style="border-bottom:1px solid #E4DED1;padding:12px 0">
       <div style="display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap">
         <div style="font-size:14px"><b>${esc(b.starts_at.slice(0, 16))}</b> · ${esc(b.serviceName)}<br>
@@ -211,7 +343,7 @@ app.get('/', (_req, res) => {
 app.get('/:file', (req, res, next) => {
   const name = req.params.file;
   if (!/^[\w.-]+\.(js|css|png|jpg|jpeg|svg|ico|webp|woff2?)$/.test(name)) return next();
-  if (['server.js', 'config.js', 'availability.js', 'email.js', 'store.js'].includes(name)) return next();
+  if (['server.js', 'config.js', 'availability.js', 'email.js', 'store.js', 'users.js'].includes(name)) return next();
   const p = path.join(__dirname, name);
   if (fs.existsSync(p)) return res.sendFile(p);
   next();

@@ -155,6 +155,34 @@ async function patientCancelled(b) {
   );
 }
 
+// --- to patient: appointment time changed (reschedule) ----------------------
+async function patientRescheduled(b) {
+  const body =
+    `<p style="margin:0 0 14px">Hi ${esc(first(b))} — the time of your appointment has been updated. Here are the new details:</p>` +
+    detailsCard(b) + bringNote +
+    `<p style="margin:16px 0 0;font-size:13.5px;color:#6C7A70">If the new time doesn't suit, just reply to this email.</p>`;
+  await send(
+    b.email,
+    `Updated time — your appointment is now ${prettyWhen(b)}`,
+    `Hi ${first(b)},\n\nThe time of your appointment has changed. It's now:\n${b.serviceName} on ${textWhen(b)}.\n\nIf it doesn't suit, reply to this email.\n— Virthy Jain Physiotherapy`,
+    shell({ accent: '#4E7A5E', badge: 'Time updated', badgeColor: '#4E7A5E', heading: 'Your appointment time has changed', bodyHtml: body, preheader: `New time: ${b.serviceName} on ${prettyWhen(b)}.` }),
+  );
+}
+
+// --- to patient: password reset ---------------------------------------------
+async function passwordReset(user, resetUrl) {
+  const body =
+    `<p style="margin:0 0 14px">Hi ${esc((user.name || '').split(' ')[0] || 'there')} — we received a request to reset your password. Click below to choose a new one. This link expires in one hour.</p>` +
+    button(resetUrl, 'Reset my password', '#B4562F') +
+    `<p style="margin:16px 0 0;font-size:13px;color:#8A9188">If you didn't ask for this, you can safely ignore this email — your password won't change.</p>`;
+  await send(
+    user.email,
+    'Reset your password',
+    `Hi,\n\nReset your password using this link (expires in 1 hour):\n${resetUrl}\n\nIf you didn't request it, ignore this email.\n— Virthy Jain Physiotherapy`,
+    shell({ accent: '#16201C', badge: 'Password reset', badgeColor: '#B4562F', heading: 'Reset your password', bodyHtml: body, preheader: 'Choose a new password — link expires in one hour.' }),
+  );
+}
+
 // --- to Virthy: new request with Accept / Reject ----------------------------
 async function practitionerRequested(b, acceptUrl, rejectUrl) {
   const text =
@@ -181,4 +209,4 @@ async function practitionerRequested(b, acceptUrl, rejectUrl) {
     shell({ accent: '#16201C', badge: 'New request', badgeColor: '#B4562F', heading: 'New booking request', bodyHtml: body, preheader: `${b.name} — ${b.serviceName} on ${prettyWhen(b)}` }));
 }
 
-module.exports = { practitionerRequested, patientRequested, patientConfirmed, patientRejected, patientCancelled };
+module.exports = { practitionerRequested, patientRequested, patientConfirmed, patientRejected, patientCancelled, patientRescheduled, passwordReset };
