@@ -493,7 +493,7 @@ app.get('/admin', (req, res) => {
     : '<p class="muted">No days blocked.</p>';
   const body = `<div class="top"><span>Virthy · Admin</span><form method="POST" action="/admin/logout"><button class="ghost" style="background:transparent;border:1px solid #F2EEE6;color:#F2EEE6;margin:0">Sign out</button></form></div>
     <div class="wrap">
-      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px"><a href="/admin/calendar" class="ghost" style="text-decoration:none;padding:8px 14px;border-radius:8px">📅 Calendar</a><a href="/admin/all" class="ghost" style="text-decoration:none;padding:8px 14px;border-radius:8px">🔍 All &amp; search</a></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px"><a href="/admin/patients" class="ghost" style="text-decoration:none;padding:8px 14px;border-radius:8px">👤 Patients</a><a href="/admin/calendar" class="ghost" style="text-decoration:none;padding:8px 14px;border-radius:8px">📅 Calendar</a><a href="/admin/all" class="ghost" style="text-decoration:none;padding:8px 14px;border-radius:8px">🔍 All &amp; search</a></div>
       <div style="margin-bottom:8px"><span class="stat"><b>${pendingCount}</b><span>Pending</span></span><span class="stat"><b>${upcoming.length}</b><span>Upcoming</span></span></div>
       <h2>Requests</h2>
       ${requests.length ? requests.map(bookingCard).join('') : '<p class="muted">No requests waiting.</p>'}
@@ -534,6 +534,11 @@ app.post('/admin/booking/:token/reject', (req, res) => { if (!guard(req, res)) r
 app.post('/admin/booking/:token/cancel', (req, res) => { if (!guard(req, res)) return; actCancel(req.params.token); res.redirect('/admin'); });
 app.post('/admin/booking/:token/reschedule', (req, res) => { if (!guard(req, res)) return; actReschedule(req.params.token, (req.body && req.body.datetime) || ''); res.redirect('/admin'); });
 app.post('/admin/booking/:token/complete', (req, res) => { if (!guard(req, res)) return; actComplete(req.params.token); res.redirect('/admin'); });
+app.post('/admin/booking/:token/note', (req, res) => {
+  if (!guard(req, res)) return;
+  const b = store.patch(req.params.token, { sessionNotes: String((req.body && req.body.note) || '') });
+  res.redirect(b ? '/admin/patient/' + encodeURIComponent(b.email) : '/admin');
+});
 app.post('/admin/booking/:token/paid', async (req, res) => {
   if (!guard(req, res)) return;
   const raw = (req.body && req.body.amount != null) ? String(req.body.amount).trim() : '';
@@ -624,13 +629,82 @@ app.post('/admin/blackout', (req, res) => {
 });
 app.post('/admin/blackout/:id/delete', (req, res) => { if (!guard(req, res)) return; store.removeBlackout(req.params.id); res.redirect('/admin'); });
 
-// Admin: view one patient (encrypted intake + their bookings).
+// A session in the patient file: status, payment, reason, and clinical notes.
+function sessionFileRow(b) {
+  const svc = serviceById(b.serviceId);
+  const col = b.status === 'confirmed' ? '#4E7A5E' : b.status === 'pending' ? '#B4562F' : b.status === 'proposed' ? '#8a6d3b' : b.status === 'completed' ? '#3E5170' : '#8A9188';
+  const pay = b.paid
+    ? `<span class="pill" style="background:#4E7A5E;margin-left:6px">Paid €${esc(b.paidAmount != null ? b.paidAmount : '')}</span>`
+    : (['confirmed', 'completed'].includes(b.status) ? '<span class="pill" style="background:#8A9188;margin-left:6px">Unpaid</span>' : '');
+  return `<div class="card">
+    <div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;align-items:center">
+      <div><b>${esc(b.starts_at.slice(0, 16))}</b> · ${esc(b.serviceName)}${svc ? ' · €' + svc.price : ''}</div>
+      <span><span class="pill" style="background:${col}">${esc(b.status)}</span>${pay}</span>
+    </div>
+    ${b.notes ? `<div class="muted" style="margin-top:6px">Reason given: ${esc(b.notes)}</div>` : ''}
+    <form method="POST" action="/admin/booking/${esc(b.token)}/note" style="margin-top:8px">
+      <div class="muted">Session notes (what happened)</div>
+      <textarea name="note" rows="3" style="width:100%;padding:10px;border:1px solid #C9C2B2;border-radius:8px;font:inherit;box-sizing:border-box">${esc(b.sessionNotes || '')}</textarea>
+      <button class="dark" style="margin-top:6px">Save notes</button>
+    </form>
+  </div>`;
+}
+
+// Patients directory — searchable by name.
+app.get('/admin/patients', (req, res) => {
+  res.type('text/html');
+  if (!adminAuthed(req)) return res.redirect('/admin');
+  const q = String(req.query.q || '').trim().toLowerCase();
+  const bookings = store.readAll();
+  const byEmail = new Map();
+  (users.list() || []).forEach((u) => byEmail.set(u.email, { name: u.name, email: u.email, phone: u.phone }));
+  bookings.forEach((b) => { if (b.email && !byEmail.has(b.email)) byEmail.set(b.email, { name: b.name, email: b.email, phone: b.phone }); });
+  const today = A.todayLocal();
+  let patients = [...byEmail.values()].map((p) => {
+    const mine = bookings.filter((b) => b.email === p.email);
+    const completed = mine.filter((b) => b.status === 'completed').length;
+    const next = mine.filter((b) => ['confirmed', 'pending', 'proposed'].includes(b.status) && b.starts_at.slice(0, 10) >= today).sort((a, b) => a.starts_at.localeCompare(b.starts_at))[0];
+    return { ...p, completed, next };
+  });
+  if (q) patients = patients.filter((p) => (p.name || '').toLowerCase().includes(q) || (p.email || '').toLowerCase().includes(q) || (p.phone || '').toLowerCase().includes(q));
+  patients.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+  const rows = patients.length ? patients.map((p) => `<a href="/admin/patient/${encodeURIComponent(p.email)}" style="text-decoration:none;color:inherit"><div class="card" style="display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap">
+      <div><b>${esc(p.name || p.email)}</b><br><span class="muted">${esc(p.email)}${p.phone ? ' · ' + esc(p.phone) : ''}</span></div>
+      <div class="muted" style="text-align:right">${p.completed} session${p.completed === 1 ? '' : 's'}${p.next ? '<br><span style="color:#4E7A5E">Next: ' + esc(p.next.starts_at.slice(0, 16)) + '</span>' : ''}</div>
+    </div></a>`).join('') : '<p class="muted">No patients found.</p>';
+  const search = `<form method="GET" action="/admin/patients" style="margin-bottom:14px;display:flex;gap:8px;flex-wrap:wrap"><input type="text" name="q" value="${esc(req.query.q || '')}" placeholder="Search patient by name" style="flex:1 1 220px;padding:10px;border:1px solid #C9C2B2;border-radius:8px;font:inherit"><button class="dark" style="margin:0">Search</button></form>`;
+  res.send(adminShell(`<div class="top"><span>Patients</span><a href="/admin">← Dashboard</a></div><div class="wrap">${search}${rows}</div>`));
+});
+
+// One patient's digital file: summary, health form, and session history.
 app.get('/admin/patient/:email', (req, res) => {
   res.type('text/html');
   if (!adminAuthed(req)) return res.redirect('/admin');
   const email = String(req.params.email || '');
-  const rec = intakes.get(email);
+  const user = users.findByEmail(email);
   const bookings = store.readAll().filter((b) => (b.email || '').toLowerCase() === email.toLowerCase()).sort((a, b) => b.starts_at.localeCompare(a.starts_at));
+  const today = A.todayLocal();
+  const name = (user && user.name) || (bookings[0] && bookings[0].name) || email;
+  const phone = (user && user.phone) || (bookings[0] && bookings[0].phone) || '';
+  const genderAge = user ? [user.gender, user.age ? user.age + ' yrs' : ''].filter(Boolean).join(' · ') : '';
+  const completed = bookings.filter((b) => b.status === 'completed').length;
+  const totalPaid = bookings.filter((b) => b.paid).reduce((s, b) => s + (Number(b.paidAmount) || 0), 0);
+  const upcoming = bookings.filter((b) => ['confirmed', 'pending', 'proposed'].includes(b.status) && b.starts_at.slice(0, 10) >= today).sort((a, b) => a.starts_at.localeCompare(b.starts_at))[0];
+
+  const summary = `<div class="card">
+    <h2 style="margin:0 0 4px">${esc(name)}</h2>
+    <div class="muted">${esc(email)}${phone ? ' · <a href="tel:' + esc(phone) + '">' + esc(phone) + '</a>' : ''}${genderAge ? ' · ' + esc(genderAge) : ''}</div>
+    <div style="margin-top:10px">
+      <span class="stat"><b>${completed}</b><span>Sessions done</span></span>
+      <span class="stat"><b>${bookings.length}</b><span>Total bookings</span></span>
+      <span class="stat"><b>€${totalPaid.toFixed(0)}</b><span>Paid to date</span></span>
+    </div>
+    ${upcoming
+      ? `<div style="margin-top:12px;background:#EDF1E9;border:1px solid #4E7A5E;border-radius:10px;padding:10px 14px"><b>Upcoming:</b> ${esc(upcoming.starts_at.slice(0, 16))} · ${esc(upcoming.serviceName)} <span class="pill" style="background:${upcoming.status === 'confirmed' ? '#4E7A5E' : '#B4562F'};margin-left:6px">${esc(upcoming.status)}</span></div>`
+      : '<div class="muted" style="margin-top:12px">No upcoming session booked.</div>'}
+  </div>`;
+
+  const rec = intakes.get(email);
   let intakeHtml;
   if (!rec) {
     intakeHtml = '<p class="muted">No health form completed yet.</p>';
@@ -642,10 +716,13 @@ app.get('/admin/patient/:email', (req, res) => {
     }).join('');
     intakeHtml += `<div style="margin-top:12px"><div class="muted">Consent (version ${esc(rec.version || '')})</div>${consentBits}</div>`;
   }
-  const body = `<div class="top"><span>Patient</span><a href="/admin">← Dashboard</a></div>
+
+  const body = `<div class="top"><span>Patient file</span><a href="/admin/patients">← Patients</a></div>
     <div class="wrap">
-      <div class="card"><h2 style="margin-top:0">${esc(email)}</h2><div class="muted" style="margin-bottom:8px">Health &amp; consent form</div>${intakeHtml}</div>
-      <div class="card"><div class="muted" style="margin-bottom:8px">Bookings</div>${bookings.length ? bookings.map(bookingCard).join('') : '<p class="muted">None.</p>'}</div>
+      ${summary}
+      <div class="card"><div class="muted" style="margin-bottom:8px">Health &amp; consent form</div>${intakeHtml}</div>
+      <h2>Session history</h2>
+      ${bookings.length ? bookings.map(sessionFileRow).join('') : '<p class="muted">No sessions yet.</p>'}
     </div>`;
   res.send(adminShell(body));
 });

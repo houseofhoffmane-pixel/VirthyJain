@@ -23,6 +23,7 @@ function findByEmail(email) {
   const e = norm(email);
   return readAll().find((u) => u.email === e) || null;
 }
+function list() { return readAll().map(publicUser); }
 
 // Public view of a user (never expose the password hash).
 function publicUser(u) {
@@ -97,4 +98,4 @@ function tokenValid(token) {
   return !!readAll().find((u) => u.resetToken === token && u.resetExpires > Date.now());
 }
 
-module.exports = { FILE, findByEmail, publicUser, create, verify, update, changePassword, setReset, resetPassword, tokenValid };
+module.exports = { FILE, findByEmail, list, publicUser, create, verify, update, changePassword, setReset, resetPassword, tokenValid };
