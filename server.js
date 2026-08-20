@@ -329,6 +329,138 @@ app.post('/reset', (req, res) => {
   res.send(resultPage('Password updated', '<h2 style="color:#4E7A5E">Password updated</h2><p style="font-size:15px">You\'re signed in with your new password.</p><p style="margin-top:14px"><a href="/#book" style="background:#16201C;color:#fff;text-decoration:none;padding:11px 20px;border-radius:999px">Back to the site</a></p>'));
 });
 
+// ===========================================================================
+// Admin dashboard (session login, for Virthy)
+// ===========================================================================
+const ADMIN_COOKIE = 'virthy_admin';
+function setAdmin(res) {
+  const body = Buffer.from('admin|' + Date.now()).toString('base64url');
+  res.cookie(ADMIN_COOKIE, body + '.' + sign('a:' + body), {
+    httpOnly: true, sameSite: 'lax', secure: process.env.NODE_ENV === 'production', maxAge: 12 * 3600e3, path: '/',
+  });
+}
+function clearAdmin(res) { res.clearCookie(ADMIN_COOKIE, { path: '/' }); }
+function adminAuthed(req) {
+  const raw = getCookie(req, ADMIN_COOKIE);
+  if (!raw) return false;
+  const dot = raw.lastIndexOf('.');
+  if (dot < 0) return false;
+  const bodyPart = raw.slice(0, dot), sig = raw.slice(dot + 1), expected = sign('a:' + bodyPart);
+  if (sig.length !== expected.length || !crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(expected))) return false;
+  try { return Date.now() - Number(Buffer.from(bodyPart, 'base64url').toString().split('|')[1]) < 12 * 3600e3; }
+  catch (e) { return false; }
+}
+
+// Shared booking actions (also used by the email links above).
+function actAccept(token) { const e = store.findByToken(token); if (!e) return; if (['confirmed', 'rejected', 'cancelled'].includes(e.status)) return; const b = store.updateStatus(token, 'confirmed'); email.patientConfirmed(b).catch(() => {}); }
+function actReject(token) { const e = store.findByToken(token); if (!e || e.status === 'rejected') return; const b = store.updateStatus(token, 'rejected'); email.patientRejected(b).catch(() => {}); }
+function actCancel(token) { const e = store.findByToken(token); if (!e || ['cancelled', 'rejected'].includes(e.status)) return; const b = store.updateStatus(token, 'cancelled'); email.patientCancelled(b).catch(() => {}); }
+function actReschedule(token, local) {
+  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(local || '')) return;
+  const date = local.slice(0, 10), hm = local.slice(11, 16);
+  const list = store.readAll();
+  const b = list.find((x) => x.token === token);
+  if (!b) return;
+  b.starts_at = `${date} ${hm}:00`;
+  b.ends_at = `${date} ${A.toHM(A.toMin(hm) + (b.durationMinutes || 45))}:00`;
+  b.status = 'confirmed';
+  b.updated_at = new Date().toISOString();
+  store.writeAll(list);
+  email.patientRescheduled(b).catch(() => {});
+}
+
+function adminShell(body) {
+  return `<!doctype html><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1">
+  <title>Admin — Virthy Jain</title><style>
+    body{margin:0;background:#F2EEE6;color:#16201C;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+    .top{position:sticky;top:0;z-index:5;background:#16201C;color:#F2EEE6;padding:14px 18px;display:flex;justify-content:space-between;align-items:center;font-weight:600}
+    .top a{color:#F2EEE6;text-decoration:none;font-weight:400}
+    .wrap{max-width:760px;margin:0 auto;padding:16px}
+    .stat{display:inline-block;background:#FFFDF8;border:1px solid #DCD5C7;border-radius:10px;padding:10px 16px;margin:0 8px 8px 0;min-width:88px}
+    .stat b{font-size:22px;display:block;line-height:1.1}.stat span{font-size:12px;color:#6C7A70}
+    .card{background:#FFFDF8;border:1px solid #DCD5C7;border-radius:12px;padding:14px 16px;margin-bottom:12px}
+    .card.pending{border-left:4px solid #B4562F}
+    .pill{display:inline-block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#fff;padding:3px 9px;border-radius:999px}
+    h2{font-size:16px;margin:22px 0 10px}
+    .muted{color:#6C7A70;font-size:13px}
+    .notes{background:#F7F4EE;border:1px solid #E4DED1;border-radius:8px;padding:8px 10px;font-size:13px;margin-top:8px;white-space:pre-wrap}
+    button{font:inherit;border:none;border-radius:8px;padding:8px 14px;cursor:pointer;font-size:13px;margin:6px 6px 0 0}
+    .green{background:#4E7A5E;color:#fff}.red{background:#B4562F;color:#fff}.dark{background:#16201C;color:#fff}.ghost{background:#fff;border:1px solid #999;color:#16201C}
+    input[type=datetime-local]{font:inherit;padding:6px;border:1px solid #ccc;border-radius:6px;font-size:13px;margin-top:6px}
+    form{display:inline}
+  </style><body>${body}`;
+}
+function adminLoginPage(err) {
+  return adminShell(`<div class="wrap"><div class="card" style="max-width:360px;margin:60px auto">
+    <h2 style="margin-top:0">Virthy · Admin</h2>
+    ${err ? '<p style="color:#B4562F;font-size:14px">Wrong password.</p>' : ''}
+    ${!process.env.ADMIN_PASSWORD ? '<p style="color:#B4562F;font-size:13px">Set an ADMIN_PASSWORD environment variable to enable admin login.</p>' : ''}
+    <form method="POST" action="/admin/login">
+      <input type="password" name="password" placeholder="Admin password" required style="width:100%;padding:12px;border:1px solid #C9C2B2;border-radius:8px;font:inherit;box-sizing:border-box">
+      <button class="dark" style="width:100%;margin-top:10px;padding:12px">Sign in</button>
+    </form></div></div>`);
+}
+function fbtn(token, action, label, cls, confirm) {
+  return `<form method="POST" action="/admin/booking/${esc(token)}/${action}"${confirm ? ` onsubmit="return confirm('${label} and email the patient?')"` : ''}><button class="${cls}">${label}</button></form>`;
+}
+function reForm(token) {
+  return `<form method="POST" action="/admin/booking/${esc(token)}/reschedule" style="display:inline-flex;gap:4px;align-items:center"><input type="datetime-local" name="datetime" required><button class="ghost">Change time</button></form>`;
+}
+function bookingCard(b) {
+  const col = b.status === 'confirmed' ? '#4E7A5E' : b.status === 'pending' ? '#B4562F' : '#8A9188';
+  const actions = b.status === 'pending'
+    ? fbtn(b.token, 'accept', 'Accept', 'green') + fbtn(b.token, 'reject', 'Reject', 'red', true) + fbtn(b.token, 'cancel', 'Cancel', 'dark', true) + reForm(b.token)
+    : b.status === 'confirmed' ? fbtn(b.token, 'cancel', 'Cancel', 'dark', true) + reForm(b.token) : '';
+  const meta = [b.gender, b.age ? b.age + ' yrs' : ''].filter(Boolean).join(' · ');
+  return `<div class="card${b.status === 'pending' ? ' pending' : ''}">
+    <div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;align-items:center">
+      <div><b style="font-size:15px">${esc(b.starts_at.slice(0, 16))}</b> · ${esc(b.serviceName)} <span class="muted">${b.durationMinutes ? '(' + b.durationMinutes + ' min)' : ''}</span></div>
+      <span class="pill" style="background:${col}">${esc(b.status)}</span>
+    </div>
+    <div class="muted" style="margin-top:4px">${esc(b.name)} · <a href="mailto:${esc(b.email)}">${esc(b.email)}</a>${b.phone ? ' · <a href="tel:' + esc(b.phone) + '">' + esc(b.phone) + '</a>' : ''} · ${esc(b.formatName || b.format)}</div>
+    ${meta ? `<div class="muted">${esc(meta)}</div>` : ''}
+    ${b.referrer ? `<div class="muted">Referred by: ${esc(b.referrer)}</div>` : ''}
+    ${b.notes ? `<div class="notes">${esc(b.notes)}</div>` : ''}
+    ${actions ? `<div style="margin-top:6px">${actions}</div>` : ''}
+  </div>`;
+}
+
+app.get('/admin', (req, res) => {
+  res.type('text/html');
+  if (!adminAuthed(req)) return res.send(adminLoginPage(req.query.err));
+  const all = store.readAll();
+  const today = A.todayLocal();
+  const pending = all.filter((b) => b.status === 'pending').sort((a, b) => a.starts_at.localeCompare(b.starts_at));
+  const upcoming = all.filter((b) => b.status === 'confirmed' && b.starts_at.slice(0, 10) >= today).sort((a, b) => a.starts_at.localeCompare(b.starts_at));
+  const body = `<div class="top"><span>Virthy · Admin</span><form method="POST" action="/admin/logout"><button class="ghost" style="background:transparent;border:1px solid #F2EEE6;color:#F2EEE6;margin:0">Sign out</button></form></div>
+    <div class="wrap">
+      <div style="margin-bottom:8px"><span class="stat"><b>${pending.length}</b><span>Pending</span></span><span class="stat"><b>${upcoming.length}</b><span>Upcoming</span></span></div>
+      <h2>Pending requests</h2>
+      ${pending.length ? pending.map(bookingCard).join('') : '<p class="muted">No requests waiting.</p>'}
+      <h2>Upcoming appointments</h2>
+      ${upcoming.length ? upcoming.map(bookingCard).join('') : '<p class="muted">Nothing upcoming.</p>'}
+      <p style="margin-top:24px"><a href="/admin/all">See all bookings (past &amp; closed) →</a></p>
+    </div>`;
+  res.send(adminShell(body));
+});
+app.get('/admin/all', (req, res) => {
+  res.type('text/html');
+  if (!adminAuthed(req)) return res.redirect('/admin');
+  const all = store.readAll().sort((a, b) => b.starts_at.localeCompare(a.starts_at));
+  res.send(adminShell(`<div class="top"><span>All bookings</span><a href="/admin">← Dashboard</a></div><div class="wrap">${all.length ? all.map(bookingCard).join('') : '<p class="muted">None yet.</p>'}</div>`));
+});
+app.post('/admin/login', (req, res) => {
+  const pw = (req.body && req.body.password) || '';
+  if (process.env.ADMIN_PASSWORD && pw === process.env.ADMIN_PASSWORD) { setAdmin(res); return res.redirect('/admin'); }
+  res.redirect('/admin?err=1');
+});
+app.post('/admin/logout', (req, res) => { clearAdmin(res); res.redirect('/admin'); });
+function guard(req, res) { if (!adminAuthed(req)) { res.redirect('/admin'); return false; } return true; }
+app.post('/admin/booking/:token/accept', (req, res) => { if (!guard(req, res)) return; actAccept(req.params.token); res.redirect('/admin'); });
+app.post('/admin/booking/:token/reject', (req, res) => { if (!guard(req, res)) return; actReject(req.params.token); res.redirect('/admin'); });
+app.post('/admin/booking/:token/cancel', (req, res) => { if (!guard(req, res)) return; actCancel(req.params.token); res.redirect('/admin'); });
+app.post('/admin/booking/:token/reschedule', (req, res) => { if (!guard(req, res)) return; actReschedule(req.params.token, (req.body && req.body.datetime) || ''); res.redirect('/admin'); });
+
 // --- optional: a simple read-only list of requests --------------------------
 app.get('/bookings', (req, res) => {
   if (process.env.ADMIN_PASSWORD && req.query.key !== process.env.ADMIN_PASSWORD)
