@@ -413,7 +413,7 @@ const ADMIN_CSS = `
   .signout{width:100%;background:transparent;border:1px solid rgba(255,255,255,.35);color:#F2EEE6;border-radius:8px;padding:9px;cursor:pointer;font:inherit;margin:0}
   .main{flex:1;min-width:0;display:flex;flex-direction:column}
   .topbar{position:sticky;top:0;z-index:5;background:#F2EEE6;border-bottom:1px solid #DCD5C7;padding:15px 24px;font-weight:600;font-size:16px}
-  .content{padding:22px 24px;max-width:940px;width:100%;margin:0 auto}
+  .content{padding:22px 24px;max-width:1080px;width:100%;margin:0 auto}
   .stat{display:inline-block;background:#FFFDF8;border:1px solid #DCD5C7;border-radius:10px;padding:10px 16px;margin:0 8px 8px 0;min-width:96px}
   .stat b{font-size:22px;display:block;line-height:1.1}.stat span{font-size:12px;color:#6C7A70}
   .card{background:#FFFDF8;border:1px solid #DCD5C7;border-radius:12px;padding:14px 16px;margin-bottom:12px}
@@ -428,7 +428,8 @@ const ADMIN_CSS = `
   form{display:inline}
   .calweek{display:grid;gap:12px;grid-template-columns:1fr}
   .calweek .card{margin-bottom:0}
-  @media(min-width:760px){.calweek{grid-template-columns:repeat(auto-fill,minmax(190px,1fr))}}
+  @media(min-width:760px){.calweek{grid-template-columns:repeat(7,1fr)}}
+  @media(min-width:760px) and (max-width:1080px){.calweek{grid-template-columns:repeat(auto-fill,minmax(150px,1fr))}}
   @media(max-width:820px){
     .app{flex-direction:column}
     .side{position:sticky;top:0;width:auto;height:auto;flex-direction:row;align-items:center;gap:6px;overflow-x:auto;padding:10px 12px;z-index:6}
@@ -785,9 +786,15 @@ app.get('/admin/calendar', (req, res) => {
     const items = blk.has(d)
       ? '<div style="color:#B4562F;font-size:13px">Blocked off</div>'
       : dayBookings.length
-      ? dayBookings.map((b) => { const col = b.status === 'confirmed' ? '#4E7A5E' : b.status === 'pending' ? '#B4562F' : '#8a6d3b'; return `<div style="display:flex;gap:8px;align-items:center;padding:4px 0"><b style="min-width:46px">${esc(b.starts_at.slice(11, 16))}</b><span style="flex:1">${esc(b.name)} · ${esc(b.serviceName)}</span><span class="pill" style="background:${col}">${esc(b.status)}</span></div>`; }).join('')
+      ? dayBookings.map((b) => {
+          const col = b.status === 'confirmed' ? '#4E7A5E' : b.status === 'pending' ? '#B4562F' : '#8a6d3b';
+          return `<a href="/admin/patient/${encodeURIComponent(b.email)}" style="display:block;text-decoration:none;color:inherit;padding:8px 0;border-top:1px solid #EFEAE0">
+            <div style="font-weight:700;font-size:14px">${esc(b.starts_at.slice(11, 16))}</div>
+            <div style="font-size:13px;color:#3D4A42;margin:2px 0 5px;overflow-wrap:anywhere">${esc(b.name)} · ${esc(b.serviceName)}</div>
+            <span class="pill" style="background:${col}">${esc(b.status)}</span></a>`;
+        }).join('')
       : '<div class="muted">—</div>';
-    daysHtml += `<div class="card"><div style="font-weight:600;margin-bottom:6px">${esc(dayLabel(d))}</div>${items}</div>`;
+    daysHtml += `<div class="card"><div style="font-weight:700;margin-bottom:4px">${esc(dayLabel(d))}</div>${items}</div>`;
   }
   const inner = `
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px"><a class="ghost" style="text-decoration:none;padding:8px 12px;border-radius:8px" href="/admin/calendar?week=${prev}">← Prev</a><b>Week of ${esc(dayLabel(monday))}</b><a class="ghost" style="text-decoration:none;padding:8px 12px;border-radius:8px" href="/admin/calendar?week=${next}">Next →</a></div>
