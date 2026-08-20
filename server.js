@@ -399,36 +399,84 @@ function actReschedule(token, local) {
   email.patientRescheduled(b).catch(() => {});
 }
 
-function adminShell(body) {
+const ADMIN_CSS = `
+  *{box-sizing:border-box}
+  body{margin:0;background:#F2EEE6;color:#16201C;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+  a{color:#B4562F}
+  .app{display:flex;min-height:100vh}
+  .side{width:220px;flex-shrink:0;background:#16201C;color:#F2EEE6;padding:18px 14px;position:sticky;top:0;height:100vh;display:flex;flex-direction:column}
+  .side .brand{font-weight:700;font-size:15px;letter-spacing:.02em;margin:4px 8px 18px}
+  .side a{display:block;color:#C9D0CB;text-decoration:none;padding:10px 12px;border-radius:8px;margin-bottom:4px;font-size:14px}
+  .side a:hover{background:rgba(255,255,255,.08);color:#fff}
+  .side a.active{background:#B4562F;color:#fff}
+  .side .spacer{flex:1}
+  .signout{width:100%;background:transparent;border:1px solid rgba(255,255,255,.35);color:#F2EEE6;border-radius:8px;padding:9px;cursor:pointer;font:inherit;margin:0}
+  .main{flex:1;min-width:0;display:flex;flex-direction:column}
+  .topbar{position:sticky;top:0;z-index:5;background:#F2EEE6;border-bottom:1px solid #DCD5C7;padding:15px 24px;font-weight:600;font-size:16px}
+  .content{padding:22px 24px;max-width:940px;width:100%;margin:0 auto}
+  .stat{display:inline-block;background:#FFFDF8;border:1px solid #DCD5C7;border-radius:10px;padding:10px 16px;margin:0 8px 8px 0;min-width:96px}
+  .stat b{font-size:22px;display:block;line-height:1.1}.stat span{font-size:12px;color:#6C7A70}
+  .card{background:#FFFDF8;border:1px solid #DCD5C7;border-radius:12px;padding:14px 16px;margin-bottom:12px}
+  .card.pending{border-left:4px solid #B4562F}
+  .pill{display:inline-block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#fff;padding:3px 9px;border-radius:999px}
+  h2{font-size:16px;margin:22px 0 10px}
+  .muted{color:#6C7A70;font-size:13px}
+  .notes{background:#F7F4EE;border:1px solid #E4DED1;border-radius:8px;padding:8px 10px;font-size:13px;margin-top:8px;white-space:pre-wrap}
+  button{font:inherit;border:none;border-radius:8px;padding:8px 14px;cursor:pointer;font-size:13px;margin:6px 6px 0 0}
+  .green{background:#4E7A5E;color:#fff}.red{background:#B4562F;color:#fff}.dark{background:#16201C;color:#fff}.ghost{background:#fff;border:1px solid #999;color:#16201C}
+  input[type=datetime-local]{font:inherit;padding:6px;border:1px solid #ccc;border-radius:6px;font-size:13px;margin-top:6px}
+  form{display:inline}
+  .calweek{display:grid;gap:12px;grid-template-columns:1fr}
+  .calweek .card{margin-bottom:0}
+  @media(min-width:760px){.calweek{grid-template-columns:repeat(auto-fill,minmax(190px,1fr))}}
+  @media(max-width:820px){
+    .app{flex-direction:column}
+    .side{position:sticky;top:0;width:auto;height:auto;flex-direction:row;align-items:center;gap:6px;overflow-x:auto;padding:10px 12px;z-index:6}
+    .side .brand,.side .spacer{display:none}
+    .side a{margin:0;padding:8px 12px;white-space:nowrap}
+    .side form{margin-left:auto}
+    .signout{width:auto;padding:8px 12px;white-space:nowrap}
+    .topbar{padding:14px 16px}
+    .content{padding:16px}
+  }
+`;
+const ADMIN_NAV = [
+  ['/admin', 'Dashboard', 'dashboard'],
+  ['/admin/patients', 'Patients', 'patients'],
+  ['/admin/calendar', 'Calendar', 'calendar'],
+  ['/admin/all', 'All bookings', 'all'],
+];
+function adminShell(title, inner, active) {
+  const nav = ADMIN_NAV.map(([href, label, key]) => `<a href="${href}"${active === key ? ' class="active"' : ''}>${label}</a>`).join('');
   return `<!doctype html><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1">
-  <title>Admin — Virthy Jain</title><style>
-    body{margin:0;background:#F2EEE6;color:#16201C;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
-    .top{position:sticky;top:0;z-index:5;background:#16201C;color:#F2EEE6;padding:14px 18px;display:flex;justify-content:space-between;align-items:center;font-weight:600}
-    .top a{color:#F2EEE6;text-decoration:none;font-weight:400}
-    .wrap{max-width:760px;margin:0 auto;padding:16px}
-    .stat{display:inline-block;background:#FFFDF8;border:1px solid #DCD5C7;border-radius:10px;padding:10px 16px;margin:0 8px 8px 0;min-width:88px}
-    .stat b{font-size:22px;display:block;line-height:1.1}.stat span{font-size:12px;color:#6C7A70}
-    .card{background:#FFFDF8;border:1px solid #DCD5C7;border-radius:12px;padding:14px 16px;margin-bottom:12px}
-    .card.pending{border-left:4px solid #B4562F}
-    .pill{display:inline-block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#fff;padding:3px 9px;border-radius:999px}
-    h2{font-size:16px;margin:22px 0 10px}
-    .muted{color:#6C7A70;font-size:13px}
-    .notes{background:#F7F4EE;border:1px solid #E4DED1;border-radius:8px;padding:8px 10px;font-size:13px;margin-top:8px;white-space:pre-wrap}
-    button{font:inherit;border:none;border-radius:8px;padding:8px 14px;cursor:pointer;font-size:13px;margin:6px 6px 0 0}
-    .green{background:#4E7A5E;color:#fff}.red{background:#B4562F;color:#fff}.dark{background:#16201C;color:#fff}.ghost{background:#fff;border:1px solid #999;color:#16201C}
-    input[type=datetime-local]{font:inherit;padding:6px;border:1px solid #ccc;border-radius:6px;font-size:13px;margin-top:6px}
-    form{display:inline}
-  </style><body>${body}`;
+  <title>${esc(title)} — Virthy Admin</title><style>${ADMIN_CSS}</style><body>
+  <div class="app">
+    <nav class="side">
+      <div class="brand">Virthy · Admin</div>
+      ${nav}
+      <div class="spacer"></div>
+      <form method="POST" action="/admin/logout"><button class="signout">Sign out</button></form>
+    </nav>
+    <div class="main">
+      <div class="topbar">${esc(title)}</div>
+      <div class="content">${inner}</div>
+    </div>
+  </div></body>`;
 }
+function adminShellBare(inner) {
+  return `<!doctype html><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1">
+  <title>Admin — Virthy Jain</title><style>${ADMIN_CSS}</style><body style="background:#16201C">${inner}</body>`;
+}
+function backLink(href, label) { return `<a href="${href}" style="display:inline-block;margin-bottom:12px;font-size:13px">← ${esc(label)}</a>`; }
 function adminLoginPage(err) {
-  return adminShell(`<div class="wrap"><div class="card" style="max-width:360px;margin:60px auto">
-    <h2 style="margin-top:0">Virthy · Admin</h2>
+  return adminShellBare(`<div style="max-width:360px;margin:60px auto;background:#FFFDF8;border-radius:14px;padding:28px">
+    <h2 style="margin:0 0 12px">Virthy · Admin</h2>
     ${err ? '<p style="color:#B4562F;font-size:14px">Wrong password.</p>' : ''}
     ${!process.env.ADMIN_PASSWORD ? '<p style="color:#B4562F;font-size:13px">Set an ADMIN_PASSWORD environment variable to enable admin login.</p>' : ''}
     <form method="POST" action="/admin/login">
       <input type="password" name="password" placeholder="Admin password" required style="width:100%;padding:12px;border:1px solid #C9C2B2;border-radius:8px;font:inherit;box-sizing:border-box">
       <button class="dark" style="width:100%;margin-top:10px;padding:12px">Sign in</button>
-    </form></div></div>`);
+    </form></div>`);
 }
 function fbtn(token, action, label, cls, confirm) {
   return `<form method="POST" action="/admin/booking/${esc(token)}/${action}"${confirm ? ` onsubmit="return confirm('${label} and email the patient?')"` : ''}><button class="${cls}">${label}</button></form>`;
@@ -491,9 +539,7 @@ app.get('/admin', (req, res) => {
   const blk = blackouts.length
     ? blackouts.map((bl) => `<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;border-bottom:1px solid #E4DED1;padding:8px 0"><span>${esc(bl.from)}${bl.to && bl.to !== bl.from ? ' → ' + esc(bl.to) : ''}${bl.reason ? ' <span class="muted">· ' + esc(bl.reason) + '</span>' : ''}</span><form method="POST" action="/admin/blackout/${esc(bl.id)}/delete"><button class="ghost" style="margin:0">Remove</button></form></div>`).join('')
     : '<p class="muted">No days blocked.</p>';
-  const body = `<div class="top"><span>Virthy · Admin</span><form method="POST" action="/admin/logout"><button class="ghost" style="background:transparent;border:1px solid #F2EEE6;color:#F2EEE6;margin:0">Sign out</button></form></div>
-    <div class="wrap">
-      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px"><a href="/admin/patients" class="ghost" style="text-decoration:none;padding:8px 14px;border-radius:8px">👤 Patients</a><a href="/admin/calendar" class="ghost" style="text-decoration:none;padding:8px 14px;border-radius:8px">📅 Calendar</a><a href="/admin/all" class="ghost" style="text-decoration:none;padding:8px 14px;border-radius:8px">🔍 All &amp; search</a></div>
+  const inner = `
       <div style="margin-bottom:8px"><span class="stat"><b>${pendingCount}</b><span>Pending</span></span><span class="stat"><b>${upcoming.length}</b><span>Upcoming</span></span></div>
       <h2>Requests</h2>
       ${requests.length ? requests.map(bookingCard).join('') : '<p class="muted">No requests waiting.</p>'}
@@ -509,9 +555,8 @@ app.get('/admin', (req, res) => {
           <button class="dark" style="margin:0">Block</button>
         </form>
         <div style="margin-top:12px">${blk}</div>
-      </div>
-    </div>`;
-  res.send(adminShell(body));
+      </div>`;
+  res.send(adminShell('Dashboard', inner, 'dashboard'));
 });
 app.get('/admin/all', (req, res) => {
   res.type('text/html');
@@ -520,7 +565,7 @@ app.get('/admin/all', (req, res) => {
   let all = store.readAll().sort((a, b) => b.starts_at.localeCompare(a.starts_at));
   if (q) all = all.filter((b) => (b.name || '').toLowerCase().includes(q) || (b.email || '').toLowerCase().includes(q) || (b.phone || '').toLowerCase().includes(q));
   const search = `<form method="GET" action="/admin/all" style="margin-bottom:14px;display:flex;gap:8px;flex-wrap:wrap"><input type="text" name="q" value="${esc(req.query.q || '')}" placeholder="Search name, email or phone" style="flex:1 1 220px;padding:10px;border:1px solid #C9C2B2;border-radius:8px;font:inherit"><button class="dark" style="margin:0">Search</button></form>`;
-  res.send(adminShell(`<div class="top"><span>All bookings</span><a href="/admin">← Dashboard</a></div><div class="wrap">${search}${all.length ? all.map(bookingCard).join('') : '<p class="muted">No matches.</p>'}</div>`));
+  res.send(adminShell('All bookings', `${search}${all.length ? all.map(bookingCard).join('') : '<p class="muted">No matches.</p>'}`, 'all'));
 });
 app.post('/admin/login', (req, res) => {
   const pw = (req.body && req.body.password) || '';
@@ -563,23 +608,22 @@ app.get('/admin/booking/:token/propose', (req, res) => {
   res.type('text/html');
   if (!adminAuthed(req)) return res.redirect('/admin');
   const b = store.findByToken(req.params.token);
-  if (!b) return res.send(adminShell('<div class="wrap"><div class="card">Not found. <a href="/admin">← Dashboard</a></div></div>'));
+  if (!b) return res.send(adminShell('Propose new time', '<div class="card">Not found.</div>', 'dashboard'));
   const service = serviceById(b.serviceId), format = formatByKey(b.format);
   const today = A.todayLocal();
   const days = A.computeRange(service, format.key, today, A.addDays(today, config.horizonDays), activeForAvailability(), store.blackoutDates());
   let opts = '';
   for (const d of days) for (const s of d.slots) if (s.free) opts += `<option value="${esc(s.start)}">${esc(dayLabel(d.date))} · ${esc(s.label)}</option>`;
   const summary = `<p style="font-size:15px;line-height:1.6"><b>${esc(b.serviceName)}</b> — ${esc(b.formatName || b.format)}<br>Requested: ${esc(b.starts_at.slice(0, 16))}<br>${esc(b.name)} · ${esc(b.email)}${b.phone ? ' · ' + esc(b.phone) : ''}</p>`;
-  const body = `<div class="top"><span>Propose new time</span><a href="/admin">← Dashboard</a></div>
-    <div class="wrap"><div class="card">${summary}
+  const inner = `${backLink('/admin', 'Dashboard')}<div class="card">${summary}
       <form method="POST" action="/admin/booking/${esc(req.params.token)}/propose" style="margin-top:14px">
         <div class="muted">Choose an available slot to offer the patient</div>
         <select name="start" required style="width:100%;padding:12px;border:1px solid #C9C2B2;border-radius:8px;font:inherit;margin-top:6px">${opts || '<option value="">No free slots in the next ' + config.horizonDays + ' days</option>'}</select>
         <button class="green" style="margin-top:12px"${opts ? '' : ' disabled'}>Propose this time to the patient</button>
       </form>
       <p class="muted" style="margin-top:12px">The patient gets an email to accept or decline. Accepting confirms it; declining releases the slot and asks them to contact you.</p>
-    </div></div>`;
-  res.send(adminShell(body));
+    </div>`;
+  res.send(adminShell('Propose new time', inner, 'dashboard'));
 });
 app.post('/admin/booking/:token/propose', (req, res) => {
   if (!guard(req, res)) return;
@@ -673,7 +717,7 @@ app.get('/admin/patients', (req, res) => {
       <div class="muted" style="text-align:right">${p.completed} session${p.completed === 1 ? '' : 's'}${p.next ? '<br><span style="color:#4E7A5E">Next: ' + esc(p.next.starts_at.slice(0, 16)) + '</span>' : ''}</div>
     </div></a>`).join('') : '<p class="muted">No patients found.</p>';
   const search = `<form method="GET" action="/admin/patients" style="margin-bottom:14px;display:flex;gap:8px;flex-wrap:wrap"><input type="text" name="q" value="${esc(req.query.q || '')}" placeholder="Search patient by name" style="flex:1 1 220px;padding:10px;border:1px solid #C9C2B2;border-radius:8px;font:inherit"><button class="dark" style="margin:0">Search</button></form>`;
-  res.send(adminShell(`<div class="top"><span>Patients</span><a href="/admin">← Dashboard</a></div><div class="wrap">${search}${rows}</div>`));
+  res.send(adminShell('Patients', `${search}${rows}`, 'patients'));
 });
 
 // One patient's digital file: summary, health form, and session history.
@@ -717,14 +761,12 @@ app.get('/admin/patient/:email', (req, res) => {
     intakeHtml += `<div style="margin-top:12px"><div class="muted">Consent (version ${esc(rec.version || '')})</div>${consentBits}</div>`;
   }
 
-  const body = `<div class="top"><span>Patient file</span><a href="/admin/patients">← Patients</a></div>
-    <div class="wrap">
+  const inner = `${backLink('/admin/patients', 'Patients')}
       ${summary}
       <div class="card"><div class="muted" style="margin-bottom:8px">Health &amp; consent form</div>${intakeHtml}</div>
       <h2>Session history</h2>
-      ${bookings.length ? bookings.map(sessionFileRow).join('') : '<p class="muted">No sessions yet.</p>'}
-    </div>`;
-  res.send(adminShell(body));
+      ${bookings.length ? bookings.map(sessionFileRow).join('') : '<p class="muted">No sessions yet.</p>'}`;
+  res.send(adminShell('Patient file', inner, 'patients'));
 });
 
 // Week calendar view.
@@ -747,12 +789,10 @@ app.get('/admin/calendar', (req, res) => {
       : '<div class="muted">—</div>';
     daysHtml += `<div class="card"><div style="font-weight:600;margin-bottom:6px">${esc(dayLabel(d))}</div>${items}</div>`;
   }
-  const body = `<div class="top"><span>Calendar</span><a href="/admin">← Dashboard</a></div>
-    <div class="wrap">
+  const inner = `
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px"><a class="ghost" style="text-decoration:none;padding:8px 12px;border-radius:8px" href="/admin/calendar?week=${prev}">← Prev</a><b>Week of ${esc(dayLabel(monday))}</b><a class="ghost" style="text-decoration:none;padding:8px 12px;border-radius:8px" href="/admin/calendar?week=${next}">Next →</a></div>
-      ${daysHtml}
-    </div>`;
-  res.send(adminShell(body));
+      <div class="calweek">${daysHtml}</div>`;
+  res.send(adminShell('Calendar', inner, 'calendar'));
 });
 
 // --- optional: a simple read-only list of requests --------------------------
