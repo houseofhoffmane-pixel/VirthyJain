@@ -577,7 +577,7 @@ function renderAccount(){
   if(state.user){
     bar.innerHTML = '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">'
       + '<span>Booking as <b>'+esc(state.user.name)+'</b> · '+esc(state.user.email)+'</span>'
-      + '<span><button type="button" onclick="openMy()" style="background:none;border:none;color:#B4562F;cursor:pointer;font:inherit;text-decoration:underline">My bookings</button> &nbsp;·&nbsp; '
+      + '<span><button type="button" onclick="openMy()" style="background:none;border:none;color:#B4562F;cursor:pointer;font:inherit;text-decoration:underline">My account</button> &nbsp;·&nbsp; '
       + '<button type="button" onclick="doLogout()" style="background:none;border:none;color:#6C7A70;cursor:pointer;font:inherit">Sign out</button></span></div>';
     el('f_name').value = state.user.name; el('f_name').readOnly = true;
     el('f_email').value = state.user.email; el('f_email').readOnly = true;
@@ -644,20 +644,48 @@ function doForgot(){
   }).catch(function(){ authErr('Network error. Please try again.'); });
 }
 function doLogout(){ postJSON('/api/logout', {}).then(function(){ state.user=null; el('f_name').value=''; el('f_email').value=''; el('f_phone').value=''; renderAccount(); }); }
+function genderOptions(sel){
+  return ['','Female','Male','Non-binary','Prefer not to say'].map(function(g){
+    var label = g || 'Gender';
+    return '<option value="'+esc(g)+'"'+(g===(sel||'')?' selected':'')+'>'+esc(label)+'</option>';
+  }).join('');
+}
 function openMy(){
-  el('myModal').style.display='block'; el('myList').innerHTML='<p style="color:#6C7A70">Loading…</p>';
+  el('myModal').style.display='block';
+  var u = state.user || {};
+  var f = 'padding:11px;border:1px solid #C9C2B2;border-radius:8px;font:inherit;width:100%;box-sizing:border-box';
+  var profile = '<div style="margin-bottom:22px">'
+    + '<div class="greenkick" style="margin-bottom:10px">Your details</div>'
+    + '<div style="display:grid;gap:10px">'
+    + '<input id="pf_name" type="text" placeholder="Full name" value="'+esc(u.name||'')+'" style="'+f+'">'
+    + '<input type="email" value="'+esc(u.email||'')+'" disabled style="'+f+';background:#F2EEE6;color:#6C7A70">'
+    + '<input id="pf_phone" type="tel" placeholder="Phone" value="'+esc(u.phone||'')+'" style="'+f+'">'
+    + '<div style="display:flex;gap:10px"><select id="pf_gender" style="'+f+'">'+genderOptions(u.gender)+'</select>'
+    + '<input id="pf_age" type="number" min="0" max="120" placeholder="Age" value="'+esc(u.age||'')+'" style="'+f+'"></div>'
+    + '<div style="display:flex;gap:10px;align-items:center;margin-top:2px"><button type="button" onclick="doSaveProfile()" class="btn-primary" style="padding:10px 18px">Save changes</button><span id="pf_msg" style="font-size:13px"></span></div>'
+    + '</div></div>';
+  el('myList').innerHTML = profile + '<div class="greenkick" style="margin:6px 0 10px">Booking history</div><div id="histList"><p style="color:#6C7A70">Loading…</p></div>';
   api('/api/my-bookings').then(function(r){
-    if(!r.ok){ el('myList').innerHTML='<p>Please sign in to see your bookings.</p>'; return; }
+    var h = el('histList');
+    if(!r.ok){ h.innerHTML='<p>Please sign in to see your bookings.</p>'; return; }
     var bs=(r.body&&r.body.bookings)||[];
-    if(!bs.length){ el('myList').innerHTML='<p style="color:#6C7A70">You have no bookings yet.</p>'; return; }
-    el('myList').innerHTML = bs.map(function(b){
+    if(!bs.length){ h.innerHTML='<p style="color:#6C7A70">You have no bookings yet.</p>'; return; }
+    h.innerHTML = bs.map(function(b){
       var col=b.status==='confirmed'?'#4E7A5E':b.status==='pending'?'#B4562F':'#8A9188';
       var label=b.status==='pending'?'Awaiting confirmation':b.status==='confirmed'?'Confirmed':b.status==='cancelled'?'Cancelled':b.status==='rejected'?'Not available':b.status;
       return '<div style="border-bottom:1px solid #E4DED1;padding:12px 0;display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap">'
         + '<div><b>'+esc(b.starts_at.slice(0,16))+'</b><br><span style="color:#6C7A70;font-size:13px">'+esc(b.serviceName)+' · '+esc(b.formatName)+'</span></div>'
         + '<span style="align-self:center;font-size:12px;font-weight:600;color:#fff;background:'+col+';padding:3px 10px;border-radius:999px">'+esc(label)+'</span></div>';
     }).join('');
-  }).catch(function(){ el('myList').innerHTML='<p style="color:#B4562F">Could not load your bookings.</p>'; });
+  }).catch(function(){ el('histList').innerHTML='<p style="color:#B4562F">Could not load your bookings.</p>'; });
+}
+function doSaveProfile(){
+  var p = { name:el('pf_name').value, phone:el('pf_phone').value, gender:el('pf_gender').value, age:el('pf_age').value };
+  var msg = el('pf_msg'); msg.style.color='#6C7A70'; msg.textContent='Saving…';
+  postJSON('/api/profile', p).then(function(r){
+    if(r.ok){ state.user=r.body.user; renderAccount(); msg.style.color='#4E7A5E'; msg.textContent='Saved ✓'; }
+    else { msg.style.color='#B4562F'; msg.textContent=(r.body&&r.body.message)||'Could not save.'; }
+  }).catch(function(){ msg.style.color='#B4562F'; msg.textContent='Network error.'; });
 }
 function closeMy(){ el('myModal').style.display='none'; }
 
@@ -694,7 +722,7 @@ loadServices().then(loadAvailability).catch(function(){
 <div id="myModal" style="display:none;position:fixed;inset:0;z-index:100;background:rgba(22,32,28,.55);padding:20px;overflow:auto">
   <div style="max-width:520px;margin:40px auto;background:#FFFDF8;border:1px solid #DCD5C7;border-radius:14px;padding:24px">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
-      <div class="serif" style="font-size:23px">My bookings</div>
+      <div class="serif" style="font-size:23px">My account</div>
       <button type="button" onclick="closeMy()" style="border:none;background:none;font-size:24px;line-height:1;cursor:pointer;color:#6C7A70">&times;</button>
     </div>
     <div id="myList"></div>

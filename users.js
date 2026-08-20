@@ -48,6 +48,19 @@ function verify(email, password) {
   return bcrypt.compareSync(password, u.passwordHash) ? u : null;
 }
 
+// Update editable profile fields (never email/password here).
+function update(email, fields) {
+  const list = readAll();
+  const u = list.find((x) => x.email === norm(email));
+  if (!u) return null;
+  if (fields.name != null && String(fields.name).trim()) u.name = String(fields.name).trim();
+  if (fields.phone != null) u.phone = String(fields.phone).trim();
+  if (fields.gender != null) u.gender = fields.gender;
+  if (fields.age != null) u.age = fields.age;
+  writeAll(list);
+  return u;
+}
+
 // Password reset: create a one-hour token, or return null if no such user.
 function setReset(email) {
   const list = readAll();
@@ -72,4 +85,4 @@ function tokenValid(token) {
   return !!readAll().find((u) => u.resetToken === token && u.resetExpires > Date.now());
 }
 
-module.exports = { FILE, findByEmail, publicUser, create, verify, setReset, resetPassword, tokenValid };
+module.exports = { FILE, findByEmail, publicUser, create, verify, update, setReset, resetPassword, tokenValid };

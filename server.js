@@ -116,6 +116,16 @@ app.post('/api/forgot', (req, res) => {
   res.json({ ok: true, message: 'If that email is registered, a reset link is on its way.' });
 });
 
+app.post('/api/profile', (req, res) => {
+  const user = currentUser(req);
+  if (!user) return res.status(401).json({ error: 'login_required' });
+  const b = req.body || {};
+  if (b.name != null && !String(b.name).trim())
+    return res.status(400).json({ error: 'name_required', message: 'Name cannot be empty.' });
+  const u = users.update(user.email, { name: b.name, phone: b.phone, gender: b.gender, age: b.age });
+  res.json({ ok: true, user: users.publicUser(u) });
+});
+
 app.get('/api/my-bookings', (req, res) => {
   const user = currentUser(req);
   if (!user) return res.status(401).json({ error: 'login_required' });
