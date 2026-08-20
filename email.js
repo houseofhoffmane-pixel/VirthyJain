@@ -24,10 +24,10 @@ function getTransport() {
   return transport;
 }
 
-async function send(to, subject, text, html) {
+async function send(to, subject, text, html, attachments) {
   if (!to) { console.log('[email] no recipient for:', subject); return; }
   try {
-    await getTransport().sendMail({ from, to, subject, text, html });
+    await getTransport().sendMail({ from, to, subject, text, html, attachments: attachments || undefined });
     console.log('[email] sent to', to, '—', subject);
   } catch (e) {
     console.error('[email] failed to', to, '—', e.message);
@@ -111,10 +111,14 @@ async function patientRequested(b) {
 }
 
 // --- to patient: accepted ---------------------------------------------------
-async function patientConfirmed(b) {
+async function patientConfirmed(b, opts) {
+  const needsIntake = opts && opts.needsIntake;
   const body =
     `<p style="margin:0 0 14px">Good news — your appointment is <strong style="color:#4E7A5E">confirmed</strong>. I look forward to seeing you.</p>` +
     detailsCard(b) + bringNote +
+    (needsIntake && SITE
+      ? `<div style="margin:16px 0 0;background:#F7F4EE;border:1px solid #E4DED1;border-radius:10px;padding:12px 14px"><p style="margin:0 0 8px;font-size:14px">Before your visit, please take 2 minutes to complete your health &amp; consent form:</p>${button(`${SITE}/account`, 'Complete my health form', '#B4562F')}</div>`
+      : '') +
     (SITE ? `<p style="margin:16px 0 0;font-size:13.5px;color:#6C7A70">Need to change something? Just reply to this email.</p>` : '');
   await send(
     b.email,
@@ -206,6 +210,34 @@ async function patientProposalDeclined(b) {
   );
 }
 
+// --- to patient: appointment reminder ---------------------------------------
+async function patientReminder(b) {
+  const body =
+    `<p style="margin:0 0 14px">Hi ${esc(first(b))} — a friendly reminder of your upcoming appointment:</p>` +
+    detailsCard(b) + bringNote +
+    `<p style="margin:16px 0 0;font-size:13.5px;color:#6C7A70">Need to change it? Just reply to this email.</p>`;
+  await send(
+    b.email,
+    `Reminder — your appointment on ${prettyWhen(b)}`,
+    `Hi ${first(b)},\n\nA reminder of your appointment: ${b.serviceName} on ${textWhen(b)}.\n\nWear comfortable clothing you can move in.\n\n— Virthy Jain Physiotherapy`,
+    shell({ accent: '#4E7A5E', badge: 'Reminder', badgeColor: '#4E7A5E', heading: 'See you soon', bodyHtml: body, preheader: `Reminder: ${b.serviceName} on ${prettyWhen(b)}.` }),
+  );
+}
+
+// --- to patient: PDF receipt ------------------------------------------------
+async function patientReceipt(b, amount, pdf) {
+  const body =
+    `<p style="margin:0 0 14px">Thanks, ${esc(first(b))} — your receipt for this session is attached as a PDF, for your records or an insurance / Revenue claim.</p>` +
+    detailsCard(b);
+  await send(
+    b.email,
+    `Receipt — ${b.serviceName}`,
+    `Hi ${first(b)},\n\nYour receipt (€${Number(amount).toFixed(2)}) for your ${b.serviceName} session is attached as a PDF.\n\n— Virthy Jain Physiotherapy`,
+    shell({ accent: '#16201C', badge: 'Receipt', badgeColor: '#4E7A5E', heading: 'Your receipt', bodyHtml: body, preheader: 'Your receipt is attached (PDF).' }),
+    [{ filename: 'receipt.pdf', content: pdf, contentType: 'application/pdf' }],
+  );
+}
+
 // --- to patient: session complete -------------------------------------------
 async function patientSessionDone(b) {
   const body =
@@ -261,4 +293,4 @@ async function practitionerRequested(b, acceptUrl, rejectUrl) {
     shell({ accent: '#16201C', badge: 'New request', badgeColor: '#B4562F', heading: 'New booking request', bodyHtml: body, preheader: `${b.name} — ${b.serviceName} on ${prettyWhen(b)}` }));
 }
 
-module.exports = { practitionerRequested, patientRequested, patientConfirmed, patientRejected, patientCancelled, patientRescheduled, patientProposed, patientProposalDeclined, patientSessionDone, passwordReset };
+module.exports = { practitionerRequested, patientRequested, patientConfirmed, patientRejected, patientCancelled, patientRescheduled, patientProposed, patientProposalDeclined, patientSessionDone, patientReminder, patientReceipt, passwordReset };

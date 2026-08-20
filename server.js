@@ -15,6 +15,8 @@ const A = require('./availability');
 const email = require('./email');
 const store = require('./store');
 const users = require('./users');
+const intakes = require('./intakes');
+const receipt = require('./receipt');
 
 const app = express();
 app.use(express.json());
@@ -124,6 +126,33 @@ app.post('/api/profile', (req, res) => {
     return res.status(400).json({ error: 'name_required', message: 'Name cannot be empty.' });
   const u = users.update(user.email, { name: b.name, phone: b.phone, gender: b.gender, age: b.age });
   res.json({ ok: true, user: users.publicUser(u) });
+});
+
+// --- patient intake / consent form -----------------------------------------
+app.get('/api/intake', (req, res) => {
+  const user = currentUser(req);
+  if (!user) return res.status(401).json({ error: 'login_required' });
+  const rec = intakes.get(user.email);
+  res.json({
+    fields: config.intake.fields,
+    consents: config.intake.consents,
+    answers: rec ? rec.answers : {},
+    completed: !!rec,
+    completedAt: rec ? rec.completedAt : null,
+  });
+});
+app.post('/api/intake', (req, res) => {
+  const user = currentUser(req);
+  if (!user) return res.status(401).json({ error: 'login_required' });
+  const b = req.body || {};
+  const answers = b.answers || {};
+  const consents = { version: config.intake.consentVersion };
+  for (const c of config.intake.consents) {
+    if (!b.consents || !b.consents[c.id]) return res.status(400).json({ error: 'consent_required', message: 'Please agree to all consent statements to continue.' });
+    consents[c.id] = { agreed: true, at: new Date().toISOString(), text: c.text };
+  }
+  intakes.save(user.email, answers, consents);
+  res.json({ ok: true });
 });
 
 app.post('/api/change-password', (req, res) => {
@@ -352,7 +381,7 @@ function adminAuthed(req) {
 }
 
 // Shared booking actions (also used by the email links above).
-function actAccept(token) { const e = store.findByToken(token); if (!e) return; if (['confirmed', 'rejected', 'cancelled'].includes(e.status)) return; const b = store.updateStatus(token, 'confirmed'); email.patientConfirmed(b).catch(() => {}); }
+function actAccept(token) { const e = store.findByToken(token); if (!e) return; if (['confirmed', 'rejected', 'cancelled'].includes(e.status)) return; const b = store.updateStatus(token, 'confirmed'); email.patientConfirmed(b, { needsIntake: !intakes.has(b.email) }).catch(() => {}); }
 function actReject(token) { const e = store.findByToken(token); if (!e || e.status === 'rejected') return; const b = store.updateStatus(token, 'rejected'); email.patientRejected(b).catch(() => {}); }
 function actCancel(token) { const e = store.findByToken(token); if (!e || ['cancelled', 'rejected'].includes(e.status)) return; const b = store.updateStatus(token, 'cancelled'); email.patientCancelled(b).catch(() => {}); }
 function actComplete(token) { const e = store.findByToken(token); if (!e) return; const b = store.updateStatus(token, 'completed'); email.patientSessionDone(b).catch(() => {}); }
@@ -441,6 +470,7 @@ function bookingCard(b) {
     </div>
     <div class="muted" style="margin-top:4px">${esc(b.name)} · <a href="mailto:${esc(b.email)}">${esc(b.email)}</a>${b.phone ? ' · <a href="tel:' + esc(b.phone) + '">' + esc(b.phone) + '</a>' : ''} · ${esc(b.formatName || b.format)}</div>
     ${meta ? `<div class="muted">${esc(meta)}</div>` : ''}
+    <div class="muted"><a href="/admin/patient/${encodeURIComponent(b.email)}">Patient &amp; health form ${intakes.has(b.email) ? '✓' : '⚠ not completed'}</a></div>
     ${b.referrer ? `<div class="muted">Referred by: ${esc(b.referrer)}</div>` : ''}
     ${b.notes ? `<div class="notes">${esc(b.notes)}</div>` : ''}
     ${actions ? `<div style="margin-top:6px">${actions}</div>` : ''}
@@ -504,11 +534,18 @@ app.post('/admin/booking/:token/reject', (req, res) => { if (!guard(req, res)) r
 app.post('/admin/booking/:token/cancel', (req, res) => { if (!guard(req, res)) return; actCancel(req.params.token); res.redirect('/admin'); });
 app.post('/admin/booking/:token/reschedule', (req, res) => { if (!guard(req, res)) return; actReschedule(req.params.token, (req.body && req.body.datetime) || ''); res.redirect('/admin'); });
 app.post('/admin/booking/:token/complete', (req, res) => { if (!guard(req, res)) return; actComplete(req.params.token); res.redirect('/admin'); });
-app.post('/admin/booking/:token/paid', (req, res) => {
+app.post('/admin/booking/:token/paid', async (req, res) => {
   if (!guard(req, res)) return;
   const raw = (req.body && req.body.amount != null) ? String(req.body.amount).trim() : '';
   const amount = raw === '' ? null : Number(raw);
-  store.patch(req.params.token, { paid: true, paidAmount: Number.isFinite(amount) ? amount : null });
+  const finalAmount = Number.isFinite(amount) ? amount : null;
+  const b = store.patch(req.params.token, { paid: true, paidAmount: finalAmount });
+  if (b && finalAmount != null) {
+    try {
+      const pdf = await receipt.buildReceipt(b, finalAmount);
+      email.patientReceipt(b, finalAmount, pdf).catch(() => {});
+    } catch (e) { console.error('receipt error:', e.message); }
+  }
   res.redirect('/admin');
 });
 app.post('/admin/booking/:token/unpaid', (req, res) => { if (!guard(req, res)) return; store.patch(req.params.token, { paid: false, paidAmount: null }); res.redirect('/admin'); });
@@ -563,7 +600,7 @@ app.get('/booking/:token/patient-accept', (req, res) => {
   if (b.status === 'confirmed') return res.send(resultPage('Confirmed', '<h2 style="color:#4E7A5E">Already confirmed</h2>' + bookingSummary(b)));
   if (b.status !== 'proposed') return res.send(resultPage('Not active', '<h2>This offer is no longer active.</h2>'));
   const nb = store.updateStatus(req.params.token, 'confirmed');
-  email.patientConfirmed(nb).catch(() => {});
+  email.patientConfirmed(nb, { needsIntake: !intakes.has(nb.email) }).catch(() => {});
   res.send(resultPage('Confirmed', '<h2 style="color:#4E7A5E">✓ Confirmed</h2>' + bookingSummary(nb) + '<p style="font-size:14px;color:#3D4A42">Thanks — your appointment is confirmed. See you then.</p>'));
 });
 app.get('/booking/:token/patient-reject', (req, res) => {
@@ -586,6 +623,32 @@ app.post('/admin/blackout', (req, res) => {
   res.redirect('/admin');
 });
 app.post('/admin/blackout/:id/delete', (req, res) => { if (!guard(req, res)) return; store.removeBlackout(req.params.id); res.redirect('/admin'); });
+
+// Admin: view one patient (encrypted intake + their bookings).
+app.get('/admin/patient/:email', (req, res) => {
+  res.type('text/html');
+  if (!adminAuthed(req)) return res.redirect('/admin');
+  const email = String(req.params.email || '');
+  const rec = intakes.get(email);
+  const bookings = store.readAll().filter((b) => (b.email || '').toLowerCase() === email.toLowerCase()).sort((a, b) => b.starts_at.localeCompare(a.starts_at));
+  let intakeHtml;
+  if (!rec) {
+    intakeHtml = '<p class="muted">No health form completed yet.</p>';
+  } else {
+    intakeHtml = config.intake.fields.map((f) => `<div style="padding:7px 0;border-bottom:1px solid #E4DED1"><div class="muted">${esc(f.label)}</div><div style="white-space:pre-wrap">${esc(rec.answers[f.id] || '—')}</div></div>`).join('');
+    const consentBits = config.intake.consents.map((c) => {
+      const cc = rec.consents && rec.consents[c.id];
+      return `<div style="font-size:12px;color:#6C7A70;margin-top:6px">${cc && cc.agreed ? '✓ agreed' : '✗ not agreed'} — ${esc(c.text)}${cc && cc.at ? ' <em>(' + esc(new Date(cc.at).toLocaleString('en-IE')) + ')</em>' : ''}</div>`;
+    }).join('');
+    intakeHtml += `<div style="margin-top:12px"><div class="muted">Consent (version ${esc(rec.version || '')})</div>${consentBits}</div>`;
+  }
+  const body = `<div class="top"><span>Patient</span><a href="/admin">← Dashboard</a></div>
+    <div class="wrap">
+      <div class="card"><h2 style="margin-top:0">${esc(email)}</h2><div class="muted" style="margin-bottom:8px">Health &amp; consent form</div>${intakeHtml}</div>
+      <div class="card"><div class="muted" style="margin-bottom:8px">Bookings</div>${bookings.length ? bookings.map(bookingCard).join('') : '<p class="muted">None.</p>'}</div>
+    </div>`;
+  res.send(adminShell(body));
+});
 
 // Week calendar view.
 app.get('/admin/calendar', (req, res) => {
@@ -655,11 +718,37 @@ app.get('/account', (_req, res) => {
 app.get('/:file', (req, res, next) => {
   const name = req.params.file;
   if (!/^[\w.-]+\.(js|css|png|jpg|jpeg|svg|ico|webp|woff2?)$/.test(name)) return next();
-  if (['server.js', 'config.js', 'availability.js', 'email.js', 'store.js', 'users.js'].includes(name)) return next();
+  if (['server.js', 'config.js', 'availability.js', 'email.js', 'store.js', 'users.js', 'intakes.js', 'receipt.js'].includes(name)) return next();
   const p = path.join(__dirname, name);
   if (fs.existsSync(p)) return res.sendFile(p);
   next();
 });
 
+// --- appointment reminders --------------------------------------------------
+// Emails a reminder ~config.reminderHours before a confirmed appointment.
+// Runs on an interval; a per-booking flag prevents duplicates.
+function sendDueReminders() {
+  try {
+    const now = A.nowLocal(); // "YYYY-MM-DD HH:MM"
+    const upto = A.localOfInstant(Date.now() + config.reminderHours * 3600e3);
+    const list = store.readAll();
+    let changed = false;
+    for (const b of list) {
+      if (b.status !== 'confirmed' || b.reminderSent) continue;
+      const start = (b.starts_at || '').slice(0, 16);
+      if (start > now && start <= upto) {
+        email.patientReminder(b).catch(() => {});
+        b.reminderSent = true;
+        changed = true;
+      }
+    }
+    if (changed) store.writeAll(list);
+  } catch (e) { console.error('reminder job error:', e.message); }
+}
+
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`Virthy booking API listening on ${PORT} · store: ${store.FILE}`));
+app.listen(PORT, () => {
+  console.log(`Virthy booking API listening on ${PORT} · store: ${store.FILE}`);
+  setTimeout(sendDueReminders, 15000);                 // shortly after boot
+  setInterval(sendDueReminders, 20 * 60 * 1000);       // then every 20 minutes
+});

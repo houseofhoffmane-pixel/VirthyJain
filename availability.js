@@ -103,6 +103,7 @@ module.exports = {
   slotsForDate,
   isFreeSlot,
   nowLocal,
+  localOfInstant,
   todayLocal,
   addDays,
   toMin,

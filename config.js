@@ -37,7 +37,42 @@ module.exports = {
   homeTravelMinutes: 30, // extra gap around a home visit
   minNoticeHours: 12,    // can't book inside the next 12 hours
   cancelCutoffHours: 12, // can't cancel inside 12 hours of the appointment
+  reminderHours: 24,     // send an email reminder this long before the appointment
 
   // How many days ahead the availability endpoint will look by default.
   horizonDays: 21,
+
+  // Practice details — shown on receipts (for insurance / Revenue claims).
+  practice: {
+    name: 'Virthy Jain Physiotherapy',
+    coruReg: process.env.CORU_REG || '',   // e.g. "PT012345" — set your CORU reg no.
+    phone: process.env.PRACTITIONER_PHONE || '+353 87 706 5821',
+    email: process.env.PRACTITIONER_EMAIL || 'virtee9808@gmail.com',
+    address: process.env.PRACTICE_ADDRESS || 'Dublin, Ireland',
+  },
+
+  // Digital intake + consent form. Add/edit fields here anytime (no code
+  // changes). types: text | textarea | date | tel | select | yesno.
+  intake: {
+    consentVersion: 'v1',
+    fields: [
+      { id: 'dob', label: 'Date of birth', type: 'date' },
+      { id: 'address', label: 'Address', type: 'textarea' },
+      { id: 'gp', label: 'GP name / practice', type: 'text' },
+      { id: 'emergency', label: 'Emergency contact (name & phone)', type: 'text' },
+      { id: 'complaint', label: 'What are you coming in for?', type: 'textarea' },
+      { id: 'duration', label: 'How long has it been going on?', type: 'text' },
+      { id: 'history', label: 'Relevant medical history / conditions', type: 'textarea' },
+      { id: 'medications', label: 'Current medications', type: 'textarea' },
+      { id: 'allergies', label: 'Allergies', type: 'text' },
+      { id: 'surgeries', label: 'Previous surgeries or injuries', type: 'textarea' },
+      { id: 'goal', label: 'Your goal for treatment', type: 'text' },
+      // Add your screening questions later, e.g.:
+      // { id: 'weightloss', label: 'Any unexplained weight loss?', type: 'yesno' },
+    ],
+    consents: [
+      { id: 'treatment', text: 'I consent to physiotherapy assessment and treatment by Virthy Jain, and confirm the information above is accurate to the best of my knowledge.' },
+      { id: 'gdpr', text: 'I consent to my personal and health information being stored and processed for my care, in line with GDPR. I understand I can request access to, or erasure of, my data at any time.' },
+    ],
+  },
 };

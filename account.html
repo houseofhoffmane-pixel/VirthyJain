@@ -62,6 +62,12 @@
     </div>
 
     <div class="card">
+      <div class="kick">Health &amp; consent form</div>
+      <div id="intakeStatus" class="muted" style="margin-bottom:10px"></div>
+      <div id="intakeForm"></div>
+    </div>
+
+    <div class="card">
       <div class="kick">Change password</div>
       <label>Current password</label><input id="cp_current" type="password" autocomplete="current-password">
       <label>New password (min 6 characters)</label><input id="cp_new" type="password" autocomplete="new-password">
@@ -125,11 +131,46 @@ function changePw(){
 }
 function signOut(){ post('/api/logout',{}).then(function(){ window.location='/'; }); }
 
+// --- intake / consent form --------------------------------------------------
+var intakeFields=[], intakeConsents=[];
+function ifield(f,val){
+  val=val==null?'':val;
+  var s='width:100%;padding:11px;border:1px solid #C9C2B2;border-radius:8px;font:inherit;box-sizing:border-box';
+  if(f.type==='textarea') return '<label>'+esc(f.label)+'</label><textarea id="if_'+f.id+'" rows="2" style="'+s+'">'+esc(val)+'</textarea>';
+  if(f.type==='yesno') return '<label>'+esc(f.label)+'</label><select id="if_'+f.id+'" style="'+s+'"><option value="">—</option><option'+(val==='Yes'?' selected':'')+'>Yes</option><option'+(val==='No'?' selected':'')+'>No</option></select>';
+  if(f.type==='select'){ var opts=(f.options||[]).map(function(o){return '<option'+(o===val?' selected':'')+'>'+esc(o)+'</option>';}).join(''); return '<label>'+esc(f.label)+'</label><select id="if_'+f.id+'" style="'+s+'"><option value=""></option>'+opts+'</select>'; }
+  var t=f.type==='date'?'date':f.type==='tel'?'tel':'text';
+  return '<label>'+esc(f.label)+'</label><input id="if_'+f.id+'" type="'+t+'" value="'+esc(val)+'" style="'+s+'">';
+}
+function loadIntake(){
+  api('/api/intake').then(function(r){
+    if(!r.ok){ return; }
+    intakeFields=r.body.fields||[]; intakeConsents=r.body.consents||[];
+    var ans=r.body.answers||{};
+    el('intakeStatus').textContent = r.body.completed ? ('Completed'+(r.body.completedAt?' '+new Date(r.body.completedAt).toLocaleDateString('en-IE'):'')+' — you can update it below.') : 'Please complete this before your first visit.';
+    var html='<div style="display:grid;gap:8px">'+intakeFields.map(function(f){return ifield(f,ans[f.id]);}).join('')+'</div>';
+    html+='<div style="margin-top:16px;display:grid;gap:10px">'+intakeConsents.map(function(c){return '<label style="display:flex;gap:8px;align-items:flex-start;font-size:13px;color:#3D4A42"><input type="checkbox" id="ic_'+c.id+'" style="margin-top:3px;width:auto">'+esc(c.text)+'</label>';}).join('')+'</div>';
+    html+='<div style="margin-top:16px;display:flex;align-items:center"><button class="primary" onclick="saveIntake()">Save health form</button><span id="intakeMsg" class="msg"></span></div>';
+    el('intakeForm').innerHTML=html;
+  }).catch(function(){});
+}
+function saveIntake(){
+  var answers={}; intakeFields.forEach(function(f){ var e=el('if_'+f.id); if(e) answers[f.id]=e.value; });
+  var consents={}, ok=true; intakeConsents.forEach(function(c){ var e=el('ic_'+c.id); consents[c.id]=!!(e&&e.checked); if(!consents[c.id]) ok=false; });
+  var m=el('intakeMsg');
+  if(!ok){ m.style.color='#B4562F'; m.textContent='Please tick the consent box(es) to continue.'; return; }
+  m.style.color='#6C7A70'; m.textContent='Saving…';
+  post('/api/intake',{answers:answers,consents:consents}).then(function(r){
+    if(r.ok){ m.style.color='#4E7A5E'; m.textContent='Saved ✓'; loadIntake(); }
+    else { m.style.color='#B4562F'; m.textContent=(r.body&&r.body.message)||'Could not save.'; }
+  }).catch(function(){ m.style.color='#B4562F'; m.textContent='Network error.'; });
+}
+
 api('/api/me').then(function(r){
   me = r.body && r.body.user;
   if(!me){ el('gate').style.display='block'; return; }
   el('panel').style.display='block';
-  render(); loadHistory();
+  render(); loadHistory(); loadIntake();
 }).catch(function(){ el('gate').style.display='block'; });
 </script>
 </body>
