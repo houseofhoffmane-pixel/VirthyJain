@@ -169,6 +169,43 @@ async function patientRescheduled(b) {
   );
 }
 
+// --- to patient: Virthy proposed a different time (accept / reject) ----------
+async function patientProposed(b, acceptUrl, rejectUrl) {
+  const body =
+    `<p style="margin:0 0 14px">Hi ${esc(first(b))} — the time you requested wasn't available, so Virthy has proposed a new one. Please let her know if it works:</p>` +
+    detailsCard(b) +
+    `<table role="presentation" cellpadding="0" cellspacing="0" style="margin:18px 0 6px"><tr>`
+    + `<td style="border-radius:999px;background:#4E7A5E"><a href="${acceptUrl}" style="display:inline-block;font-family:Arial,Helvetica,sans-serif;font-size:15px;font-weight:bold;color:#fff;text-decoration:none;padding:13px 26px;border-radius:999px">✓ This works</a></td>`
+    + `<td style="width:12px"></td>`
+    + `<td style="border-radius:999px;background:#B4562F"><a href="${rejectUrl}" style="display:inline-block;font-family:Arial,Helvetica,sans-serif;font-size:15px;font-weight:bold;color:#fff;text-decoration:none;padding:13px 26px;border-radius:999px">✕ Doesn't suit</a></td>`
+    + `</tr></table>`
+    + `<p style="margin:12px 0 0;font-size:13px;color:#8A9188">If it doesn't suit, you can arrange another time with Virthy directly.</p>`;
+  await send(
+    b.email,
+    `A new time for your appointment — ${prettyWhen(b)}`,
+    `Hi ${first(b)},\n\nThe time you requested wasn't available. Virthy has proposed: ${b.serviceName} on ${textWhen(b)}.\n\nThis works: ${acceptUrl}\nDoesn't suit: ${rejectUrl}\n\n— Virthy Jain Physiotherapy`,
+    shell({ accent: '#B4562F', badge: 'New time proposed', heading: 'Virthy proposed a new time', bodyHtml: body, preheader: `Proposed: ${b.serviceName} on ${prettyWhen(b)} — does it work?` }),
+  );
+}
+
+// --- to patient: they declined the proposed time -----------------------------
+async function patientProposalDeclined(b) {
+  const phone = process.env.PRACTITIONER_PHONE || '+353 87 706 5821';
+  const mail = practitionerTo || '';
+  const body =
+    `<p style="margin:0 0 14px">No problem, ${esc(first(b))} — that time is released. To find one that suits you both, please get in touch with Virthy directly and then rebook:</p>` +
+    `<div style="background:#F7F4EE;border:1px solid #E4DED1;border-radius:12px;padding:14px 18px;font-size:15px">`
+    + (mail ? `<div style="margin-bottom:6px"><span style="color:#6C7A70">Email</span> &nbsp; <a href="mailto:${esc(mail)}">${esc(mail)}</a></div>` : '')
+    + `<div><span style="color:#6C7A70">Phone</span> &nbsp; <a href="tel:${esc(phone.replace(/\s/g, ''))}">${esc(phone)}</a></div></div>`
+    + (SITE ? button(`${SITE}/#book`, 'Book a session', '#B4562F') : '');
+  await send(
+    b.email,
+    'Let\'s find a time that works',
+    `Hi ${first(b)},\n\nThat time is released. Please contact Virthy to arrange one that suits:\nEmail: ${mail}\nPhone: ${phone}\n\nThen rebook on the site${SITE ? ' (' + SITE + '/#book)' : ''}.\n\n— Virthy Jain Physiotherapy`,
+    shell({ accent: '#16201C', badge: 'Let\'s arrange a time', badgeColor: '#B4562F', heading: 'Let\'s find a time that works', bodyHtml: body, preheader: 'Contact Virthy to arrange a time that suits you.' }),
+  );
+}
+
 // --- to patient: password reset ---------------------------------------------
 async function passwordReset(user, resetUrl) {
   const body =
@@ -209,4 +246,4 @@ async function practitionerRequested(b, acceptUrl, rejectUrl) {
     shell({ accent: '#16201C', badge: 'New request', badgeColor: '#B4562F', heading: 'New booking request', bodyHtml: body, preheader: `${b.name} — ${b.serviceName} on ${prettyWhen(b)}` }));
 }
 
-module.exports = { practitionerRequested, patientRequested, patientConfirmed, patientRejected, patientCancelled, patientRescheduled, passwordReset };
+module.exports = { practitionerRequested, patientRequested, patientConfirmed, patientRejected, patientCancelled, patientRescheduled, patientProposed, patientProposalDeclined, passwordReset };

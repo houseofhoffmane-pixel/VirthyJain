@@ -166,12 +166,12 @@ app.get('/api/availability', (req, res) => {
   if (!service || !format) return res.status(400).json({ error: 'bad_request' });
   const from = /^\d{4}-\d{2}-\d{2}$/.test(req.query.from || '') ? req.query.from : A.todayLocal();
   const to = /^\d{4}-\d{2}-\d{2}$/.test(req.query.to || '') ? req.query.to : A.addDays(from, config.horizonDays);
-  res.json({ timezone: config.timezone, days: A.computeRange(service, format.key, from, to, activeForAvailability()) });
+  res.json({ timezone: config.timezone, days: A.computeRange(service, format.key, from, to, activeForAvailability(), store.blackoutDates()) });
 });
 
 function nextFree(service, formatKey, count = 3) {
   const today = A.todayLocal();
-  const days = A.computeRange(service, formatKey, today, A.addDays(today, config.horizonDays), activeForAvailability());
+  const days = A.computeRange(service, formatKey, today, A.addDays(today, config.horizonDays), activeForAvailability(), store.blackoutDates());
   const out = [];
   for (const d of days) for (const s of d.slots) if (s.free) { out.push(s.start); if (out.length >= count) return out; }
   return out;
@@ -201,7 +201,7 @@ app.post('/api/bookings', async (req, res) => {
   const date = b.start.slice(0, 10);
   const sameDate = store.activeBookings().filter((x) => x.starts_at.slice(0, 10) === date)
     .map((x) => ({ starts_at: x.starts_at, ends_at: x.ends_at, format: x.format }));
-  if (!A.isFreeSlot(service, format.key, b.start, sameDate)) {
+  if (!A.isFreeSlot(service, format.key, b.start, sameDate, store.blackoutDates())) {
     return res.status(409).json({ error: 'slot_taken', alternatives: nextFree(service, format.key, 3) });
   }
 
@@ -406,10 +406,15 @@ function fbtn(token, action, label, cls, confirm) {
 function reForm(token) {
   return `<form method="POST" action="/admin/booking/${esc(token)}/reschedule" style="display:inline-flex;gap:4px;align-items:center"><input type="datetime-local" name="datetime" required><button class="ghost">Change time</button></form>`;
 }
+function proposeLink(token) {
+  return `<a href="/admin/booking/${esc(token)}/propose" style="display:inline-block;background:#fff;border:1px solid #999;color:#16201C;border-radius:8px;padding:8px 14px;font-size:13px;margin:6px 6px 0 0;text-decoration:none">Propose new time</a>`;
+}
 function bookingCard(b) {
-  const col = b.status === 'confirmed' ? '#4E7A5E' : b.status === 'pending' ? '#B4562F' : '#8A9188';
+  const col = b.status === 'confirmed' ? '#4E7A5E' : b.status === 'pending' ? '#B4562F' : b.status === 'proposed' ? '#8a6d3b' : '#8A9188';
   const actions = b.status === 'pending'
-    ? fbtn(b.token, 'accept', 'Accept', 'green') + fbtn(b.token, 'reject', 'Reject', 'red', true) + fbtn(b.token, 'cancel', 'Cancel', 'dark', true) + reForm(b.token)
+    ? fbtn(b.token, 'accept', 'Accept', 'green') + fbtn(b.token, 'reject', 'Reject', 'red', true) + fbtn(b.token, 'cancel', 'Cancel', 'dark', true) + proposeLink(b.token)
+    : b.status === 'proposed'
+    ? '<span class="muted" style="margin-right:6px">Waiting on patient to accept…</span>' + fbtn(b.token, 'cancel', 'Cancel', 'dark', true) + proposeLink(b.token)
     : b.status === 'confirmed' ? fbtn(b.token, 'cancel', 'Cancel', 'dark', true) + reForm(b.token) : '';
   const meta = [b.gender, b.age ? b.age + ' yrs' : ''].filter(Boolean).join(' · ');
   return `<div class="card${b.status === 'pending' ? ' pending' : ''}">
@@ -430,24 +435,43 @@ app.get('/admin', (req, res) => {
   if (!adminAuthed(req)) return res.send(adminLoginPage(req.query.err));
   const all = store.readAll();
   const today = A.todayLocal();
-  const pending = all.filter((b) => b.status === 'pending').sort((a, b) => a.starts_at.localeCompare(b.starts_at));
+  const requests = all.filter((b) => b.status === 'pending' || b.status === 'proposed').sort((a, b) => a.starts_at.localeCompare(b.starts_at));
   const upcoming = all.filter((b) => b.status === 'confirmed' && b.starts_at.slice(0, 10) >= today).sort((a, b) => a.starts_at.localeCompare(b.starts_at));
+  const pendingCount = all.filter((b) => b.status === 'pending').length;
+  const blackouts = store.readBlackouts().sort((a, b) => a.from.localeCompare(b.from));
+  const dinput = 'padding:8px;border:1px solid #ccc;border-radius:6px;font:inherit';
+  const blk = blackouts.length
+    ? blackouts.map((bl) => `<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;border-bottom:1px solid #E4DED1;padding:8px 0"><span>${esc(bl.from)}${bl.to && bl.to !== bl.from ? ' → ' + esc(bl.to) : ''}${bl.reason ? ' <span class="muted">· ' + esc(bl.reason) + '</span>' : ''}</span><form method="POST" action="/admin/blackout/${esc(bl.id)}/delete"><button class="ghost" style="margin:0">Remove</button></form></div>`).join('')
+    : '<p class="muted">No days blocked.</p>';
   const body = `<div class="top"><span>Virthy · Admin</span><form method="POST" action="/admin/logout"><button class="ghost" style="background:transparent;border:1px solid #F2EEE6;color:#F2EEE6;margin:0">Sign out</button></form></div>
     <div class="wrap">
-      <div style="margin-bottom:8px"><span class="stat"><b>${pending.length}</b><span>Pending</span></span><span class="stat"><b>${upcoming.length}</b><span>Upcoming</span></span></div>
-      <h2>Pending requests</h2>
-      ${pending.length ? pending.map(bookingCard).join('') : '<p class="muted">No requests waiting.</p>'}
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px"><a href="/admin/calendar" class="ghost" style="text-decoration:none;padding:8px 14px;border-radius:8px">📅 Calendar</a><a href="/admin/all" class="ghost" style="text-decoration:none;padding:8px 14px;border-radius:8px">🔍 All &amp; search</a></div>
+      <div style="margin-bottom:8px"><span class="stat"><b>${pendingCount}</b><span>Pending</span></span><span class="stat"><b>${upcoming.length}</b><span>Upcoming</span></span></div>
+      <h2>Requests</h2>
+      ${requests.length ? requests.map(bookingCard).join('') : '<p class="muted">No requests waiting.</p>'}
       <h2>Upcoming appointments</h2>
       ${upcoming.length ? upcoming.map(bookingCard).join('') : '<p class="muted">Nothing upcoming.</p>'}
-      <p style="margin-top:24px"><a href="/admin/all">See all bookings (past &amp; closed) →</a></p>
+      <h2>Block off days</h2>
+      <div class="card">
+        <form method="POST" action="/admin/blackout" style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end">
+          <div><div class="muted">From</div><input type="date" name="from" required style="${dinput}"></div>
+          <div><div class="muted">To (optional)</div><input type="date" name="to" style="${dinput}"></div>
+          <div style="flex:1 1 140px"><div class="muted">Reason</div><input type="text" name="reason" placeholder="Holiday, course…" style="width:100%;${dinput}"></div>
+          <button class="dark" style="margin:0">Block</button>
+        </form>
+        <div style="margin-top:12px">${blk}</div>
+      </div>
     </div>`;
   res.send(adminShell(body));
 });
 app.get('/admin/all', (req, res) => {
   res.type('text/html');
   if (!adminAuthed(req)) return res.redirect('/admin');
-  const all = store.readAll().sort((a, b) => b.starts_at.localeCompare(a.starts_at));
-  res.send(adminShell(`<div class="top"><span>All bookings</span><a href="/admin">← Dashboard</a></div><div class="wrap">${all.length ? all.map(bookingCard).join('') : '<p class="muted">None yet.</p>'}</div>`));
+  const q = String(req.query.q || '').trim().toLowerCase();
+  let all = store.readAll().sort((a, b) => b.starts_at.localeCompare(a.starts_at));
+  if (q) all = all.filter((b) => (b.name || '').toLowerCase().includes(q) || (b.email || '').toLowerCase().includes(q) || (b.phone || '').toLowerCase().includes(q));
+  const search = `<form method="GET" action="/admin/all" style="margin-bottom:14px;display:flex;gap:8px;flex-wrap:wrap"><input type="text" name="q" value="${esc(req.query.q || '')}" placeholder="Search name, email or phone" style="flex:1 1 220px;padding:10px;border:1px solid #C9C2B2;border-radius:8px;font:inherit"><button class="dark" style="margin:0">Search</button></form>`;
+  res.send(adminShell(`<div class="top"><span>All bookings</span><a href="/admin">← Dashboard</a></div><div class="wrap">${search}${all.length ? all.map(bookingCard).join('') : '<p class="muted">No matches.</p>'}</div>`));
 });
 app.post('/admin/login', (req, res) => {
   const pw = (req.body && req.body.password) || '';
@@ -460,6 +484,108 @@ app.post('/admin/booking/:token/accept', (req, res) => { if (!guard(req, res)) r
 app.post('/admin/booking/:token/reject', (req, res) => { if (!guard(req, res)) return; actReject(req.params.token); res.redirect('/admin'); });
 app.post('/admin/booking/:token/cancel', (req, res) => { if (!guard(req, res)) return; actCancel(req.params.token); res.redirect('/admin'); });
 app.post('/admin/booking/:token/reschedule', (req, res) => { if (!guard(req, res)) return; actReschedule(req.params.token, (req.body && req.body.datetime) || ''); res.redirect('/admin'); });
+
+function dayLabel(dateStr) { return new Date(dateStr + 'T12:00:00Z').toLocaleDateString('en-IE', { weekday: 'short', day: 'numeric', month: 'short' }); }
+function mondayOf(dateStr) { const w = new Date(dateStr + 'T12:00:00Z').getUTCDay(); return A.addDays(dateStr, w === 0 ? -6 : 1 - w); }
+
+// Propose a new time (from available slots) for a pending/proposed booking.
+app.get('/admin/booking/:token/propose', (req, res) => {
+  res.type('text/html');
+  if (!adminAuthed(req)) return res.redirect('/admin');
+  const b = store.findByToken(req.params.token);
+  if (!b) return res.send(adminShell('<div class="wrap"><div class="card">Not found. <a href="/admin">← Dashboard</a></div></div>'));
+  const service = serviceById(b.serviceId), format = formatByKey(b.format);
+  const today = A.todayLocal();
+  const days = A.computeRange(service, format.key, today, A.addDays(today, config.horizonDays), activeForAvailability(), store.blackoutDates());
+  let opts = '';
+  for (const d of days) for (const s of d.slots) if (s.free) opts += `<option value="${esc(s.start)}">${esc(dayLabel(d.date))} · ${esc(s.label)}</option>`;
+  const summary = `<p style="font-size:15px;line-height:1.6"><b>${esc(b.serviceName)}</b> — ${esc(b.formatName || b.format)}<br>Requested: ${esc(b.starts_at.slice(0, 16))}<br>${esc(b.name)} · ${esc(b.email)}${b.phone ? ' · ' + esc(b.phone) : ''}</p>`;
+  const body = `<div class="top"><span>Propose new time</span><a href="/admin">← Dashboard</a></div>
+    <div class="wrap"><div class="card">${summary}
+      <form method="POST" action="/admin/booking/${esc(req.params.token)}/propose" style="margin-top:14px">
+        <div class="muted">Choose an available slot to offer the patient</div>
+        <select name="start" required style="width:100%;padding:12px;border:1px solid #C9C2B2;border-radius:8px;font:inherit;margin-top:6px">${opts || '<option value="">No free slots in the next ' + config.horizonDays + ' days</option>'}</select>
+        <button class="green" style="margin-top:12px"${opts ? '' : ' disabled'}>Propose this time to the patient</button>
+      </form>
+      <p class="muted" style="margin-top:12px">The patient gets an email to accept or decline. Accepting confirms it; declining releases the slot and asks them to contact you.</p>
+    </div></div>`;
+  res.send(adminShell(body));
+});
+app.post('/admin/booking/:token/propose', (req, res) => {
+  if (!guard(req, res)) return;
+  const start = String((req.body && req.body.start) || '');
+  if (!/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(start)) return res.redirect('/admin/booking/' + req.params.token + '/propose');
+  const list = store.readAll();
+  const b = list.find((x) => x.token === req.params.token);
+  if (!b) return res.redirect('/admin');
+  const date = start.slice(0, 10), hm = start.slice(11, 16);
+  b.starts_at = start;
+  b.ends_at = `${date} ${A.toHM(A.toMin(hm) + (b.durationMinutes || 45))}:00`;
+  b.status = 'proposed';
+  b.updated_at = new Date().toISOString();
+  store.writeAll(list);
+  email.patientProposed(b, `${PUBLIC_URL}/booking/${b.token}/patient-accept`, `${PUBLIC_URL}/booking/${b.token}/patient-reject`).catch(() => {});
+  res.redirect('/admin');
+});
+
+// Patient responds to a proposed time (from their email).
+app.get('/booking/:token/patient-accept', (req, res) => {
+  const b = store.findByToken(req.params.token);
+  if (!b) return res.status(404).send(resultPage('Not found', '<h2>This link is not valid.</h2>'));
+  if (b.status === 'confirmed') return res.send(resultPage('Confirmed', '<h2 style="color:#4E7A5E">Already confirmed</h2>' + bookingSummary(b)));
+  if (b.status !== 'proposed') return res.send(resultPage('Not active', '<h2>This offer is no longer active.</h2>'));
+  const nb = store.updateStatus(req.params.token, 'confirmed');
+  email.patientConfirmed(nb).catch(() => {});
+  res.send(resultPage('Confirmed', '<h2 style="color:#4E7A5E">✓ Confirmed</h2>' + bookingSummary(nb) + '<p style="font-size:14px;color:#3D4A42">Thanks — your appointment is confirmed. See you then.</p>'));
+});
+app.get('/booking/:token/patient-reject', (req, res) => {
+  const b = store.findByToken(req.params.token);
+  if (!b) return res.status(404).send(resultPage('Not found', '<h2>This link is not valid.</h2>'));
+  if (b.status !== 'proposed') return res.send(resultPage('Thanks', '<h2>Thanks for letting us know.</h2>'));
+  const nb = store.updateStatus(req.params.token, 'declined');
+  email.patientProposalDeclined(nb).catch(() => {});
+  res.send(resultPage('Noted', '<h2 style="color:#B4562F">No problem</h2>' + bookingSummary(nb) + '<p style="font-size:14px;color:#3D4A42">That time is released. Please contact Virthy to arrange one that suits — her details are in the email we just sent — then rebook.</p>'));
+});
+
+// Block-out (holiday) management.
+app.post('/admin/blackout', (req, res) => {
+  if (!guard(req, res)) return;
+  const b = req.body || {};
+  if (/^\d{4}-\d{2}-\d{2}$/.test(b.from || '')) {
+    const to = /^\d{4}-\d{2}-\d{2}$/.test(b.to || '') && b.to >= b.from ? b.to : b.from;
+    store.addBlackout(b.from, to, b.reason || '');
+  }
+  res.redirect('/admin');
+});
+app.post('/admin/blackout/:id/delete', (req, res) => { if (!guard(req, res)) return; store.removeBlackout(req.params.id); res.redirect('/admin'); });
+
+// Week calendar view.
+app.get('/admin/calendar', (req, res) => {
+  res.type('text/html');
+  if (!adminAuthed(req)) return res.redirect('/admin');
+  const anchor = /^\d{4}-\d{2}-\d{2}$/.test(req.query.week || '') ? req.query.week : A.todayLocal();
+  const monday = mondayOf(anchor);
+  const prev = A.addDays(monday, -7), next = A.addDays(monday, 7);
+  const active = store.activeBookings();
+  const blk = store.blackoutDates();
+  let daysHtml = '';
+  for (let i = 0; i < 7; i++) {
+    const d = A.addDays(monday, i);
+    const dayBookings = active.filter((b) => b.starts_at.slice(0, 10) === d).sort((a, b) => a.starts_at.localeCompare(b.starts_at));
+    const items = blk.has(d)
+      ? '<div style="color:#B4562F;font-size:13px">Blocked off</div>'
+      : dayBookings.length
+      ? dayBookings.map((b) => { const col = b.status === 'confirmed' ? '#4E7A5E' : b.status === 'pending' ? '#B4562F' : '#8a6d3b'; return `<div style="display:flex;gap:8px;align-items:center;padding:4px 0"><b style="min-width:46px">${esc(b.starts_at.slice(11, 16))}</b><span style="flex:1">${esc(b.name)} · ${esc(b.serviceName)}</span><span class="pill" style="background:${col}">${esc(b.status)}</span></div>`; }).join('')
+      : '<div class="muted">—</div>';
+    daysHtml += `<div class="card"><div style="font-weight:600;margin-bottom:6px">${esc(dayLabel(d))}</div>${items}</div>`;
+  }
+  const body = `<div class="top"><span>Calendar</span><a href="/admin">← Dashboard</a></div>
+    <div class="wrap">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px"><a class="ghost" style="text-decoration:none;padding:8px 12px;border-radius:8px" href="/admin/calendar?week=${prev}">← Prev</a><b>Week of ${esc(dayLabel(monday))}</b><a class="ghost" style="text-decoration:none;padding:8px 12px;border-radius:8px" href="/admin/calendar?week=${next}">Next →</a></div>
+      ${daysHtml}
+    </div>`;
+  res.send(adminShell(body));
+});
 
 // --- optional: a simple read-only list of requests --------------------------
 app.get('/bookings', (req, res) => {

@@ -8,6 +8,7 @@ const os = require('os');
 const path = require('path');
 
 const FILE = process.env.DATA_FILE || path.join(os.homedir(), 'virthy-bookings.json');
+const BLACKOUTS_FILE = process.env.BLACKOUTS_FILE || path.join(os.homedir(), 'virthy-blackouts.json');
 
 function readAll() {
   try {
@@ -27,9 +28,41 @@ function writeAll(list) {
   }
 }
 
-// Bookings that currently occupy the calendar (block a slot).
+// Bookings that currently occupy the calendar (block a slot). A 'proposed'
+// booking (Virthy offered a new time, patient hasn't replied) still holds it.
 function activeBookings() {
-  return readAll().filter((b) => b.status === 'pending' || b.status === 'confirmed');
+  return readAll().filter((b) => ['pending', 'confirmed', 'proposed'].includes(b.status));
+}
+
+// --- holiday / day block-outs ----------------------------------------------
+function addOneDay(dateStr) {
+  const d = new Date(dateStr + 'T12:00:00Z');
+  d.setUTCDate(d.getUTCDate() + 1);
+  return d.toISOString().slice(0, 10);
+}
+function readBlackouts() {
+  try { return JSON.parse(fs.readFileSync(BLACKOUTS_FILE, 'utf8')); } catch (e) { return []; }
+}
+function writeBlackouts(list) {
+  try { fs.writeFileSync(BLACKOUTS_FILE, JSON.stringify(list, null, 2)); return true; }
+  catch (e) { console.error('[store] blackouts write', e.message); return false; }
+}
+function addBlackout(from, to, reason) {
+  const list = readBlackouts();
+  const rec = { id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6), from, to: to || from, reason: reason || '' };
+  list.push(rec);
+  writeBlackouts(list);
+  return rec;
+}
+function removeBlackout(id) { writeBlackouts(readBlackouts().filter((x) => x.id !== id)); }
+// Set of every blocked 'YYYY-MM-DD'.
+function blackoutDates() {
+  const set = new Set();
+  for (const bl of readBlackouts()) {
+    let d = bl.from; const end = bl.to || bl.from; let guard = 0;
+    while (d <= end && guard++ < 400) { set.add(d); d = addOneDay(d); }
+  }
+  return set;
 }
 
 function findByToken(token) {
@@ -52,4 +85,7 @@ function updateStatus(token, status) {
   return b;
 }
 
-module.exports = { FILE, readAll, writeAll, activeBookings, findByToken, add, updateStatus };
+module.exports = {
+  FILE, readAll, writeAll, activeBookings, findByToken, add, updateStatus,
+  readBlackouts, addBlackout, removeBlackout, blackoutDates,
+};

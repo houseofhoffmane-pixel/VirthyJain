@@ -102,8 +102,8 @@ function loadHistory(){
     var bs = (r.body&&r.body.bookings)||[];
     if(!bs.length){ h.innerHTML='<p style="color:#6C7A70">You have no bookings yet. <a href="/#book">Book a session</a>.</p>'; return; }
     h.innerHTML = bs.map(function(b){
-      var col=b.status==='confirmed'?'#4E7A5E':b.status==='pending'?'#B4562F':'#8A9188';
-      var label=b.status==='pending'?'Awaiting confirmation':b.status==='confirmed'?'Confirmed':b.status==='cancelled'?'Cancelled':b.status==='rejected'?'Not available':b.status;
+      var col=b.status==='confirmed'?'#4E7A5E':(b.status==='pending'||b.status==='proposed')?'#B4562F':'#8A9188';
+      var label=b.status==='pending'?'Awaiting confirmation':b.status==='confirmed'?'Confirmed':b.status==='proposed'?'New time proposed — check your email':b.status==='cancelled'?'Cancelled':b.status==='rejected'?'Not available':b.status==='declined'?'Please contact us':b.status;
       return '<div class="hrow"><div><b>'+esc(b.starts_at.slice(0,16))+'</b><br><span style="color:#6C7A70;font-size:13px">'+esc(b.serviceName)+' · '+esc(b.formatName)+'</span></div>'
         + '<span class="pill" style="align-self:center;background:'+col+'">'+esc(label)+'</span></div>';
     }).join('');

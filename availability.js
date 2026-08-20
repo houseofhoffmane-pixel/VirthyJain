@@ -42,7 +42,9 @@ function conflicts(candStartMin, candEndMin, candFormat, existing) {
 }
 
 // --- slots for one date/service/format -------------------------------------
-function slotsForDate(service, formatKey, dateStr, existingSameDate) {
+function slotsForDate(service, formatKey, dateStr, existingSameDate, blackout) {
+  // A blocked-off day (holiday / course) is treated as non-working.
+  if (blackout && blackout.has(dateStr)) return { date: dateStr, working: false, slots: [] };
   const windows = (config.hours[formatKey] || {})[weekdayOf(dateStr)] || [];
   const working = windows.length > 0;
   const threshold = localOfInstant(Date.now() + config.minNoticeHours * 3600e3); // "YYYY-MM-DD HH:MM"
@@ -72,7 +74,7 @@ function slotsForDate(service, formatKey, dateStr, existingSameDate) {
 }
 
 // --- a range of days --------------------------------------------------------
-function computeRange(service, formatKey, fromDate, toDate, existing) {
+function computeRange(service, formatKey, fromDate, toDate, existing, blackout) {
   const byDate = new Map();
   for (const b of existing) {
     const d = b.starts_at.slice(0, 10);
@@ -83,16 +85,16 @@ function computeRange(service, formatKey, fromDate, toDate, existing) {
   let d = fromDate;
   let guard = 0;
   while (d <= toDate && guard++ < 400) {
-    days.push(slotsForDate(service, formatKey, d, byDate.get(d) || []));
+    days.push(slotsForDate(service, formatKey, d, byDate.get(d) || [], blackout));
     d = addDays(d, 1);
   }
   return days;
 }
 
 // Is `startStr` ("YYYY-MM-DD HH:MM:SS") an actually-offered free slot right now?
-function isFreeSlot(service, formatKey, startStr, existingSameDate) {
+function isFreeSlot(service, formatKey, startStr, existingSameDate, blackout) {
   const date = startStr.slice(0, 10);
-  const day = slotsForDate(service, formatKey, date, existingSameDate);
+  const day = slotsForDate(service, formatKey, date, existingSameDate, blackout);
   return day.slots.some((s) => s.start === startStr && s.free);
 }
 
