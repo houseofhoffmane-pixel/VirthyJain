@@ -126,6 +126,17 @@ app.post('/api/profile', (req, res) => {
   res.json({ ok: true, user: users.publicUser(u) });
 });
 
+app.post('/api/change-password', (req, res) => {
+  const user = currentUser(req);
+  if (!user) return res.status(401).json({ error: 'login_required' });
+  const b = req.body || {};
+  const r = users.changePassword(user.email, b.currentPassword, b.newPassword);
+  if (r.error === 'wrong_current') return res.status(400).json({ error: 'wrong_current', message: 'Your current password is incorrect.' });
+  if (r.error === 'weak') return res.status(400).json({ error: 'weak_password', message: 'New password must be at least 6 characters.' });
+  if (!r.ok) return res.status(400).json({ error: 'failed', message: 'Could not change password.' });
+  res.json({ ok: true });
+});
+
 app.get('/api/my-bookings', (req, res) => {
   const user = currentUser(req);
   if (!user) return res.status(401).json({ error: 'login_required' });
@@ -349,6 +360,11 @@ app.get('/', (_req, res) => {
   const indexPath = path.join(__dirname, 'index.html');
   if (fs.existsSync(indexPath)) return res.sendFile(indexPath);
   res.type('text').send('Virthy booking API is running. See /health');
+});
+app.get('/account', (_req, res) => {
+  const p = path.join(__dirname, 'account.html');
+  if (fs.existsSync(p)) return res.sendFile(p);
+  res.redirect('/');
 });
 app.get('/:file', (req, res, next) => {
   const name = req.params.file;

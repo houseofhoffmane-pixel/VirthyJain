@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>My account — Virthy Jain Physiotherapy</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Public+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+  *,*::before,*::after{box-sizing:border-box}
+  body{margin:0;background:#F2EEE6;color:#16201C;font-family:'Public Sans',system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+  a{color:#B4562F;text-decoration:none}a:hover{color:#16201C}
+  .serif{font-family:'Instrument Serif',serif;font-weight:400;letter-spacing:-0.01em}
+  .wrap{max-width:680px;margin:0 auto;padding:0 20px}
+  header{display:flex;align-items:baseline;justify-content:space-between;gap:14px;padding:18px 0;border-bottom:1px solid #DCD5C7}
+  .card{background:#FFFDF8;border:1px solid #DCD5C7;border-radius:12px;padding:24px;margin:18px 0}
+  h1{font-size:clamp(28px,5vw,38px);margin:24px 0 6px}
+  h2{font-size:19px;margin:0 0 14px}
+  .kick{font-size:11.5px;letter-spacing:0.13em;text-transform:uppercase;color:#4E7A5E;font-weight:600;margin-bottom:10px}
+  label{display:block;font-size:13px;color:#4A574F;margin:10px 0 4px}
+  input,select{font:inherit;width:100%;padding:12px;border:1px solid #C9C2B2;border-radius:8px;background:#FFFDF8;color:#16201C}
+  input:disabled{background:#F2EEE6;color:#6C7A70}
+  .row{display:flex;gap:12px;flex-wrap:wrap}.row>div{flex:1 1 160px}
+  button{font:inherit;border:none;border-radius:999px;cursor:pointer}
+  .primary{background:#B4562F;color:#FFF8F0;padding:12px 22px}.primary:hover{background:#16201C}
+  .ghost{background:transparent;border:1px solid #C9C2B2;color:#16201C;padding:11px 20px}
+  .msg{font-size:13.5px;margin-left:10px}
+  .pill{display:inline-block;font-size:12px;font-weight:600;color:#fff;padding:3px 10px;border-radius:999px}
+  .hrow{border-bottom:1px solid #E4DED1;padding:12px 0;display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <a href="/" class="serif" style="font-size:22px;color:#16201C">Virthy&nbsp;Jain<span style="color:#B4562F">.</span></a>
+    <a href="/" style="font-size:14px;color:#4A574F">← Back to site</a>
+  </header>
+
+  <div id="gate" style="display:none">
+    <div class="card" style="text-align:center">
+      <h2>Please sign in</h2>
+      <p style="color:#4A574F">You need to be signed in to view your account.</p>
+      <a href="/#book" class="primary" style="display:inline-block;margin-top:8px">Go to sign in</a>
+    </div>
+  </div>
+
+  <div id="panel" style="display:none">
+    <h1 class="serif">My account</h1>
+    <p class="muted" id="hello" style="color:#6C7A70;margin:0 0 8px"></p>
+
+    <div class="card">
+      <div class="kick">Your details</div>
+      <label>Full name</label><input id="pf_name" type="text">
+      <label>Email</label><input id="pf_email" type="email" disabled>
+      <label>Phone</label><input id="pf_phone" type="tel">
+      <div class="row">
+        <div><label>Gender</label><select id="pf_gender"></select></div>
+        <div><label>Age</label><input id="pf_age" type="number" min="0" max="120"></div>
+      </div>
+      <div style="margin-top:16px;display:flex;align-items:center"><button class="primary" onclick="saveProfile()">Save changes</button><span id="pf_msg" class="msg"></span></div>
+    </div>
+
+    <div class="card">
+      <div class="kick">Change password</div>
+      <label>Current password</label><input id="cp_current" type="password" autocomplete="current-password">
+      <label>New password (min 6 characters)</label><input id="cp_new" type="password" autocomplete="new-password">
+      <div style="margin-top:16px;display:flex;align-items:center"><button class="primary" onclick="changePw()">Update password</button><span id="cp_msg" class="msg"></span></div>
+    </div>
+
+    <div class="card">
+      <div class="kick">Booking history</div>
+      <div id="hist"><p style="color:#6C7A70">Loading…</p></div>
+    </div>
+
+    <div style="text-align:center;margin:8px 0 40px"><button class="ghost" onclick="signOut()">Sign out</button></div>
+  </div>
+</div>
+
+<script>
+"use strict";
+function el(id){ return document.getElementById(id); }
+function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];}); }
+function api(path,opts){ return fetch(path,opts).then(function(r){ return r.json().then(function(j){return {ok:r.ok,status:r.status,body:j};}).catch(function(){return {ok:r.ok,status:r.status,body:{}};}); }); }
+function post(path,data){ return api(path,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)}); }
+var me = null;
+
+function genderOptions(sel){
+  return ['','Female','Male','Non-binary','Prefer not to say'].map(function(g){
+    return '<option value="'+esc(g)+'"'+(g===(sel||'')?' selected':'')+'>'+esc(g||'Gender')+'</option>';
+  }).join('');
+}
+function render(){
+  el('pf_gender').innerHTML = genderOptions(me.gender);
+  el('pf_name').value = me.name||''; el('pf_email').value = me.email||'';
+  el('pf_phone').value = me.phone||''; el('pf_age').value = me.age||'';
+  el('hello').textContent = 'Signed in as '+me.email;
+}
+function loadHistory(){
+  api('/api/my-bookings').then(function(r){
+    var h = el('hist');
+    var bs = (r.body&&r.body.bookings)||[];
+    if(!bs.length){ h.innerHTML='<p style="color:#6C7A70">You have no bookings yet. <a href="/#book">Book a session</a>.</p>'; return; }
+    h.innerHTML = bs.map(function(b){
+      var col=b.status==='confirmed'?'#4E7A5E':b.status==='pending'?'#B4562F':'#8A9188';
+      var label=b.status==='pending'?'Awaiting confirmation':b.status==='confirmed'?'Confirmed':b.status==='cancelled'?'Cancelled':b.status==='rejected'?'Not available':b.status;
+      return '<div class="hrow"><div><b>'+esc(b.starts_at.slice(0,16))+'</b><br><span style="color:#6C7A70;font-size:13px">'+esc(b.serviceName)+' · '+esc(b.formatName)+'</span></div>'
+        + '<span class="pill" style="align-self:center;background:'+col+'">'+esc(label)+'</span></div>';
+    }).join('');
+  }).catch(function(){ el('hist').innerHTML='<p style="color:#B4562F">Could not load your bookings.</p>'; });
+}
+function saveProfile(){
+  var m=el('pf_msg'); m.style.color='#6C7A70'; m.textContent='Saving…';
+  post('/api/profile',{name:el('pf_name').value,phone:el('pf_phone').value,gender:el('pf_gender').value,age:el('pf_age').value}).then(function(r){
+    if(r.ok){ me=r.body.user; m.style.color='#4E7A5E'; m.textContent='Saved ✓'; }
+    else { m.style.color='#B4562F'; m.textContent=(r.body&&r.body.message)||'Could not save.'; }
+  }).catch(function(){ m.style.color='#B4562F'; m.textContent='Network error.'; });
+}
+function changePw(){
+  var m=el('cp_msg'); m.style.color='#6C7A70'; m.textContent='Updating…';
+  post('/api/change-password',{currentPassword:el('cp_current').value,newPassword:el('cp_new').value}).then(function(r){
+    if(r.ok){ m.style.color='#4E7A5E'; m.textContent='Password updated ✓'; el('cp_current').value=''; el('cp_new').value=''; }
+    else { m.style.color='#B4562F'; m.textContent=(r.body&&r.body.message)||'Could not update.'; }
+  }).catch(function(){ m.style.color='#B4562F'; m.textContent='Network error.'; });
+}
+function signOut(){ post('/api/logout',{}).then(function(){ window.location='/'; }); }
+
+api('/api/me').then(function(r){
+  me = r.body && r.body.user;
+  if(!me){ el('gate').style.display='block'; return; }
+  el('panel').style.display='block';
+  render(); loadHistory();
+}).catch(function(){ el('gate').style.display='block'; });
+</script>
+</body>
+</html>

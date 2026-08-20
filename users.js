@@ -61,6 +61,18 @@ function update(email, fields) {
   return u;
 }
 
+// Change password while signed in (verifies the current password).
+function changePassword(email, currentPassword, newPassword) {
+  const list = readAll();
+  const u = list.find((x) => x.email === norm(email));
+  if (!u) return { error: 'not_found' };
+  if (!bcrypt.compareSync(currentPassword || '', u.passwordHash)) return { error: 'wrong_current' };
+  if (String(newPassword || '').length < 6) return { error: 'weak' };
+  u.passwordHash = bcrypt.hashSync(newPassword, 10);
+  writeAll(list);
+  return { ok: true };
+}
+
 // Password reset: create a one-hour token, or return null if no such user.
 function setReset(email) {
   const list = readAll();
@@ -85,4 +97,4 @@ function tokenValid(token) {
   return !!readAll().find((u) => u.resetToken === token && u.resetExpires > Date.now());
 }
 
-module.exports = { FILE, findByEmail, publicUser, create, verify, update, setReset, resetPassword, tokenValid };
+module.exports = { FILE, findByEmail, publicUser, create, verify, update, changePassword, setReset, resetPassword, tokenValid };
