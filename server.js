@@ -143,7 +143,7 @@ app.get('/api/my-bookings', (req, res) => {
   const mine = store.readAll()
     .filter((b) => b.email === user.email)
     .sort((a, b) => b.starts_at.localeCompare(a.starts_at))
-    .map((b) => ({ serviceName: b.serviceName, formatName: b.formatName || b.format, starts_at: b.starts_at, status: b.status, paid: !!b.paid }));
+    .map((b) => ({ serviceName: b.serviceName, formatName: b.formatName || b.format, starts_at: b.starts_at, status: b.status }));
   res.json({ bookings: mine });
 });
 
@@ -410,20 +410,28 @@ function reForm(token) {
 function proposeLink(token) {
   return `<a href="/admin/booking/${esc(token)}/propose" style="display:inline-block;background:#fff;border:1px solid #999;color:#16201C;border-radius:8px;padding:8px 14px;font-size:13px;margin:6px 6px 0 0;text-decoration:none">Propose new time</a>`;
 }
+function paidControl(b) {
+  const svc = serviceById(b.serviceId);
+  const val = b.paid ? (b.paidAmount != null ? b.paidAmount : '') : (svc ? svc.price : '');
+  return `<form method="POST" action="/admin/booking/${esc(b.token)}/paid" style="display:inline-flex;gap:4px;align-items:center;margin:6px 6px 0 0">
+    <span style="font-size:13px">€</span><input type="number" step="0.01" min="0" name="amount" value="${esc(val)}" style="width:78px;padding:6px;border:1px solid #ccc;border-radius:6px;font-size:13px">
+    <button class="${b.paid ? 'ghost' : 'green'}">${b.paid ? 'Update paid' : 'Mark paid'}</button>
+    ${b.paid ? `<button formaction="/admin/booking/${esc(b.token)}/unpaid" class="ghost">Unpaid</button>` : ''}
+  </form>`;
+}
 function bookingCard(b) {
   const col = b.status === 'confirmed' ? '#4E7A5E' : b.status === 'pending' ? '#B4562F' : b.status === 'proposed' ? '#8a6d3b' : b.status === 'completed' ? '#3E5170' : '#8A9188';
   const svc = serviceById(b.serviceId);
   const price = svc ? ' · €' + svc.price : '';
-  const paidBtn = b.paid ? fbtn(b.token, 'paid', 'Mark unpaid', 'ghost') : fbtn(b.token, 'paid', 'Mark paid', 'green');
   const actions = b.status === 'pending'
     ? fbtn(b.token, 'accept', 'Accept', 'green') + fbtn(b.token, 'reject', 'Reject', 'red', true) + fbtn(b.token, 'cancel', 'Cancel', 'dark', true) + proposeLink(b.token)
     : b.status === 'proposed'
     ? '<span class="muted" style="margin-right:6px">Waiting on patient to accept…</span>' + fbtn(b.token, 'cancel', 'Cancel', 'dark', true) + proposeLink(b.token)
     : b.status === 'confirmed'
-    ? fbtn(b.token, 'complete', 'Session done', 'dark', true) + paidBtn + fbtn(b.token, 'cancel', 'Cancel', 'ghost', true) + reForm(b.token)
-    : b.status === 'completed' ? paidBtn : '';
+    ? fbtn(b.token, 'complete', 'Session done', 'dark', true) + fbtn(b.token, 'cancel', 'Cancel', 'ghost', true) + reForm(b.token) + '<div>' + paidControl(b) + '</div>'
+    : b.status === 'completed' ? paidControl(b) : '';
   const payPill = ['confirmed', 'completed'].includes(b.status)
-    ? (b.paid ? '<span class="pill" style="background:#4E7A5E;margin-left:6px">Paid</span>' : '<span class="pill" style="background:#8A9188;margin-left:6px">Unpaid</span>')
+    ? (b.paid ? `<span class="pill" style="background:#4E7A5E;margin-left:6px">Paid €${esc(b.paidAmount != null ? b.paidAmount : '')}</span>` : '<span class="pill" style="background:#8A9188;margin-left:6px">Unpaid</span>')
     : '';
   const meta = [b.gender, b.age ? b.age + ' yrs' : ''].filter(Boolean).join(' · ');
   return `<div class="card${b.status === 'pending' ? ' pending' : ''}">
@@ -496,7 +504,14 @@ app.post('/admin/booking/:token/reject', (req, res) => { if (!guard(req, res)) r
 app.post('/admin/booking/:token/cancel', (req, res) => { if (!guard(req, res)) return; actCancel(req.params.token); res.redirect('/admin'); });
 app.post('/admin/booking/:token/reschedule', (req, res) => { if (!guard(req, res)) return; actReschedule(req.params.token, (req.body && req.body.datetime) || ''); res.redirect('/admin'); });
 app.post('/admin/booking/:token/complete', (req, res) => { if (!guard(req, res)) return; actComplete(req.params.token); res.redirect('/admin'); });
-app.post('/admin/booking/:token/paid', (req, res) => { if (!guard(req, res)) return; const b = store.findByToken(req.params.token); if (b) store.patch(req.params.token, { paid: !b.paid }); res.redirect('/admin'); });
+app.post('/admin/booking/:token/paid', (req, res) => {
+  if (!guard(req, res)) return;
+  const raw = (req.body && req.body.amount != null) ? String(req.body.amount).trim() : '';
+  const amount = raw === '' ? null : Number(raw);
+  store.patch(req.params.token, { paid: true, paidAmount: Number.isFinite(amount) ? amount : null });
+  res.redirect('/admin');
+});
+app.post('/admin/booking/:token/unpaid', (req, res) => { if (!guard(req, res)) return; store.patch(req.params.token, { paid: false, paidAmount: null }); res.redirect('/admin'); });
 
 function dayLabel(dateStr) { return new Date(dateStr + 'T12:00:00Z').toLocaleDateString('en-IE', { weekday: 'short', day: 'numeric', month: 'short' }); }
 function mondayOf(dateStr) { const w = new Date(dateStr + 'T12:00:00Z').getUTCDay(); return A.addDays(dateStr, w === 0 ? -6 : 1 - w); }
