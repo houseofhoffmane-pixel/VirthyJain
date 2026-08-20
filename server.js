@@ -143,7 +143,7 @@ app.get('/api/my-bookings', (req, res) => {
   const mine = store.readAll()
     .filter((b) => b.email === user.email)
     .sort((a, b) => b.starts_at.localeCompare(a.starts_at))
-    .map((b) => ({ serviceName: b.serviceName, formatName: b.formatName || b.format, starts_at: b.starts_at, status: b.status }));
+    .map((b) => ({ serviceName: b.serviceName, formatName: b.formatName || b.format, starts_at: b.starts_at, status: b.status, paid: !!b.paid }));
   res.json({ bookings: mine });
 });
 
@@ -355,6 +355,7 @@ function adminAuthed(req) {
 function actAccept(token) { const e = store.findByToken(token); if (!e) return; if (['confirmed', 'rejected', 'cancelled'].includes(e.status)) return; const b = store.updateStatus(token, 'confirmed'); email.patientConfirmed(b).catch(() => {}); }
 function actReject(token) { const e = store.findByToken(token); if (!e || e.status === 'rejected') return; const b = store.updateStatus(token, 'rejected'); email.patientRejected(b).catch(() => {}); }
 function actCancel(token) { const e = store.findByToken(token); if (!e || ['cancelled', 'rejected'].includes(e.status)) return; const b = store.updateStatus(token, 'cancelled'); email.patientCancelled(b).catch(() => {}); }
+function actComplete(token) { const e = store.findByToken(token); if (!e) return; const b = store.updateStatus(token, 'completed'); email.patientSessionDone(b).catch(() => {}); }
 function actReschedule(token, local) {
   if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(local || '')) return;
   const date = local.slice(0, 10), hm = local.slice(11, 16);
@@ -410,17 +411,25 @@ function proposeLink(token) {
   return `<a href="/admin/booking/${esc(token)}/propose" style="display:inline-block;background:#fff;border:1px solid #999;color:#16201C;border-radius:8px;padding:8px 14px;font-size:13px;margin:6px 6px 0 0;text-decoration:none">Propose new time</a>`;
 }
 function bookingCard(b) {
-  const col = b.status === 'confirmed' ? '#4E7A5E' : b.status === 'pending' ? '#B4562F' : b.status === 'proposed' ? '#8a6d3b' : '#8A9188';
+  const col = b.status === 'confirmed' ? '#4E7A5E' : b.status === 'pending' ? '#B4562F' : b.status === 'proposed' ? '#8a6d3b' : b.status === 'completed' ? '#3E5170' : '#8A9188';
+  const svc = serviceById(b.serviceId);
+  const price = svc ? ' · €' + svc.price : '';
+  const paidBtn = b.paid ? fbtn(b.token, 'paid', 'Mark unpaid', 'ghost') : fbtn(b.token, 'paid', 'Mark paid', 'green');
   const actions = b.status === 'pending'
     ? fbtn(b.token, 'accept', 'Accept', 'green') + fbtn(b.token, 'reject', 'Reject', 'red', true) + fbtn(b.token, 'cancel', 'Cancel', 'dark', true) + proposeLink(b.token)
     : b.status === 'proposed'
     ? '<span class="muted" style="margin-right:6px">Waiting on patient to accept…</span>' + fbtn(b.token, 'cancel', 'Cancel', 'dark', true) + proposeLink(b.token)
-    : b.status === 'confirmed' ? fbtn(b.token, 'cancel', 'Cancel', 'dark', true) + reForm(b.token) : '';
+    : b.status === 'confirmed'
+    ? fbtn(b.token, 'complete', 'Session done', 'dark', true) + paidBtn + fbtn(b.token, 'cancel', 'Cancel', 'ghost', true) + reForm(b.token)
+    : b.status === 'completed' ? paidBtn : '';
+  const payPill = ['confirmed', 'completed'].includes(b.status)
+    ? (b.paid ? '<span class="pill" style="background:#4E7A5E;margin-left:6px">Paid</span>' : '<span class="pill" style="background:#8A9188;margin-left:6px">Unpaid</span>')
+    : '';
   const meta = [b.gender, b.age ? b.age + ' yrs' : ''].filter(Boolean).join(' · ');
   return `<div class="card${b.status === 'pending' ? ' pending' : ''}">
     <div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;align-items:center">
-      <div><b style="font-size:15px">${esc(b.starts_at.slice(0, 16))}</b> · ${esc(b.serviceName)} <span class="muted">${b.durationMinutes ? '(' + b.durationMinutes + ' min)' : ''}</span></div>
-      <span class="pill" style="background:${col}">${esc(b.status)}</span>
+      <div><b style="font-size:15px">${esc(b.starts_at.slice(0, 16))}</b> · ${esc(b.serviceName)}${price} <span class="muted">${b.durationMinutes ? '(' + b.durationMinutes + ' min)' : ''}</span></div>
+      <span><span class="pill" style="background:${col}">${esc(b.status)}</span>${payPill}</span>
     </div>
     <div class="muted" style="margin-top:4px">${esc(b.name)} · <a href="mailto:${esc(b.email)}">${esc(b.email)}</a>${b.phone ? ' · <a href="tel:' + esc(b.phone) + '">' + esc(b.phone) + '</a>' : ''} · ${esc(b.formatName || b.format)}</div>
     ${meta ? `<div class="muted">${esc(meta)}</div>` : ''}
@@ -437,6 +446,7 @@ app.get('/admin', (req, res) => {
   const today = A.todayLocal();
   const requests = all.filter((b) => b.status === 'pending' || b.status === 'proposed').sort((a, b) => a.starts_at.localeCompare(b.starts_at));
   const upcoming = all.filter((b) => b.status === 'confirmed' && b.starts_at.slice(0, 10) >= today).sort((a, b) => a.starts_at.localeCompare(b.starts_at));
+  const toWrapUp = all.filter((b) => b.status === 'confirmed' && b.starts_at.slice(0, 10) < today).sort((a, b) => b.starts_at.localeCompare(a.starts_at));
   const pendingCount = all.filter((b) => b.status === 'pending').length;
   const blackouts = store.readBlackouts().sort((a, b) => a.from.localeCompare(b.from));
   const dinput = 'padding:8px;border:1px solid #ccc;border-radius:6px;font:inherit';
@@ -451,6 +461,7 @@ app.get('/admin', (req, res) => {
       ${requests.length ? requests.map(bookingCard).join('') : '<p class="muted">No requests waiting.</p>'}
       <h2>Upcoming appointments</h2>
       ${upcoming.length ? upcoming.map(bookingCard).join('') : '<p class="muted">Nothing upcoming.</p>'}
+      ${toWrapUp.length ? '<h2>To wrap up (past sessions)</h2>' + toWrapUp.map(bookingCard).join('') : ''}
       <h2>Block off days</h2>
       <div class="card">
         <form method="POST" action="/admin/blackout" style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end">
@@ -484,6 +495,8 @@ app.post('/admin/booking/:token/accept', (req, res) => { if (!guard(req, res)) r
 app.post('/admin/booking/:token/reject', (req, res) => { if (!guard(req, res)) return; actReject(req.params.token); res.redirect('/admin'); });
 app.post('/admin/booking/:token/cancel', (req, res) => { if (!guard(req, res)) return; actCancel(req.params.token); res.redirect('/admin'); });
 app.post('/admin/booking/:token/reschedule', (req, res) => { if (!guard(req, res)) return; actReschedule(req.params.token, (req.body && req.body.datetime) || ''); res.redirect('/admin'); });
+app.post('/admin/booking/:token/complete', (req, res) => { if (!guard(req, res)) return; actComplete(req.params.token); res.redirect('/admin'); });
+app.post('/admin/booking/:token/paid', (req, res) => { if (!guard(req, res)) return; const b = store.findByToken(req.params.token); if (b) store.patch(req.params.token, { paid: !b.paid }); res.redirect('/admin'); });
 
 function dayLabel(dateStr) { return new Date(dateStr + 'T12:00:00Z').toLocaleDateString('en-IE', { weekday: 'short', day: 'numeric', month: 'short' }); }
 function mondayOf(dateStr) { const w = new Date(dateStr + 'T12:00:00Z').getUTCDay(); return A.addDays(dateStr, w === 0 ? -6 : 1 - w); }

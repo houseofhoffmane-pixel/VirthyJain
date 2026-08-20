@@ -206,6 +206,21 @@ async function patientProposalDeclined(b) {
   );
 }
 
+// --- to patient: session complete -------------------------------------------
+async function patientSessionDone(b) {
+  const body =
+    `<p style="margin:0 0 14px">Thank you, ${esc(first(b))} — that completes your ${esc(b.serviceName)} session. It was good to see you.</p>` +
+    detailsCard(b) +
+    `<p style="margin:14px 0 0;font-size:14px;line-height:1.6">Keep up with any exercises we went through. If anything flares up, or you'd like a follow-up, just reply to this email or book again whenever suits.</p>` +
+    (SITE ? button(`${SITE}/#book`, 'Book a follow-up', '#4E7A5E') : '');
+  await send(
+    b.email,
+    'Thanks for your session',
+    `Hi ${first(b)},\n\nThank you — that completes your ${b.serviceName} session on ${textWhen(b)}. Keep up with any exercises we discussed, and book again any time.\n\n— Virthy Jain Physiotherapy`,
+    shell({ accent: '#4E7A5E', badge: 'Session complete', badgeColor: '#4E7A5E', heading: 'Your session is complete', bodyHtml: body, preheader: 'Thanks for coming in — here\'s to your recovery.' }),
+  );
+}
+
 // --- to patient: password reset ---------------------------------------------
 async function passwordReset(user, resetUrl) {
   const body =
@@ -246,4 +261,4 @@ async function practitionerRequested(b, acceptUrl, rejectUrl) {
     shell({ accent: '#16201C', badge: 'New request', badgeColor: '#B4562F', heading: 'New booking request', bodyHtml: body, preheader: `${b.name} — ${b.serviceName} on ${prettyWhen(b)}` }));
 }
 
-module.exports = { practitionerRequested, patientRequested, patientConfirmed, patientRejected, patientCancelled, patientRescheduled, patientProposed, patientProposalDeclined, passwordReset };
+module.exports = { practitionerRequested, patientRequested, patientConfirmed, patientRejected, patientCancelled, patientRescheduled, patientProposed, patientProposalDeclined, patientSessionDone, passwordReset };

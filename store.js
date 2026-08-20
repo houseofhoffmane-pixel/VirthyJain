@@ -85,7 +85,18 @@ function updateStatus(token, status) {
   return b;
 }
 
+// Set arbitrary fields on a booking (e.g. { paid: true }).
+function patch(token, fields) {
+  const list = readAll();
+  const b = list.find((x) => x.token === token);
+  if (!b) return null;
+  Object.assign(b, fields);
+  b.updated_at = new Date().toISOString();
+  writeAll(list);
+  return b;
+}
+
 module.exports = {
-  FILE, readAll, writeAll, activeBookings, findByToken, add, updateStatus,
+  FILE, readAll, writeAll, activeBookings, findByToken, add, updateStatus, patch,
   readBlackouts, addBlackout, removeBlackout, blackoutDates,
 };
