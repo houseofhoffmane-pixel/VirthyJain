@@ -20,6 +20,7 @@ const intakes = require('./intakes');
 const receipt = require('./receipt');
 const secure = require('./secure');
 const filesStore = require('./files');
+const hep = require('./hep');
 const multer = require('multer');
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -220,6 +221,16 @@ app.get('/api/my-bookings', (req, res) => {
       return { serviceName: b.serviceName, formatName: b.formatName || b.format, starts_at: b.starts_at, status: b.status, recommendation: c.recommendation || '', files: files, token: b.status === 'proposed' ? b.token : undefined };
     });
   res.json({ bookings: mine });
+});
+
+// The patient's home exercise programme (assigned by Virthy in the admin).
+app.get('/api/my-hep', (req, res) => {
+  const user = currentUser(req);
+  if (!user) return res.status(401).json({ error: 'login_required' });
+  const items = hep.forPatient(user.email).map((x) => ({
+    name: x.name, sets: x.sets, reps: x.reps, hold: x.hold, freq: x.freq, notes: x.notes, video: x.video,
+  }));
+  res.json({ exercises: items });
 });
 
 // Patient accepts / rejects a proposed time from their account (same as the
@@ -918,6 +929,20 @@ app.post('/admin/settings/hours', (req, res) => {
 });
 app.post('/admin/settings/reset', (req, res) => { if (!guard(req, res)) return; settings.resetAll(); res.redirect('/admin/settings?saved=1'); });
 
+// --- home exercise programme (admin adds; patient sees in their account) ----
+app.post('/admin/hep', (req, res) => {
+  if (!guard(req, res)) return;
+  const b = req.body || {};
+  const email = String(b.email || '');
+  if (email) hep.add({ patientEmail: email, name: b.name, sets: b.sets, reps: b.reps, hold: b.hold, freq: b.freq, notes: b.notes, video: b.video });
+  res.redirect('/admin/patient/' + encodeURIComponent(email));
+});
+app.post('/admin/hep/:id/delete', (req, res) => {
+  if (!guard(req, res)) return;
+  hep.remove(req.params.id);
+  res.redirect('/admin/patient/' + encodeURIComponent(String((req.body && req.body.email) || '')));
+});
+
 // Permanently delete a booking and its data.
 app.post('/admin/booking/:token/delete', (req, res) => {
   if (!guard(req, res)) return;
@@ -1085,10 +1110,39 @@ app.get('/admin/patient/:email', (req, res) => {
   const reportHtml = report
     ? `<div style="margin-top:12px;padding-top:12px;border-top:1px solid #E4DED1"><div class="muted">Report uploaded by patient</div>📄 <a href="/files/${esc(report.id)}">${esc(report.originalName)}</a></div>`
     : '';
+
+  const hepDin = 'padding:9px;border:1px solid #C9C2B2;border-radius:8px;font:inherit';
+  const exercises = hep.forPatient(email);
+  const hepList = exercises.length
+    ? exercises.map((x) => {
+        const bits = [x.sets && x.sets + ' sets', x.reps && x.reps + ' reps', x.hold && 'hold ' + x.hold, x.freq].filter(Boolean).join(' · ');
+        return `<div style="border-bottom:1px solid #E4DED1;padding:10px 0;display:flex;justify-content:space-between;gap:10px;align-items:flex-start">
+          <div><b>${esc(x.name)}</b>${bits ? '<br><span class="muted">' + esc(bits) + '</span>' : ''}${x.notes ? '<br><span style="white-space:pre-wrap">' + esc(x.notes) + '</span>' : ''}${x.video ? '<br>🎬 <a href="' + esc(x.video) + '" target="_blank" rel="noopener">Video</a>' : ''}</div>
+          <form method="POST" action="/admin/hep/${esc(x.id)}/delete"><input type="hidden" name="email" value="${esc(email)}"><button class="ghost" style="margin:0">Remove</button></form>
+        </div>`;
+      }).join('')
+    : '<p class="muted">No exercises assigned yet.</p>';
+  const hepCard = `<div class="card"><div class="muted" style="margin-bottom:8px">Home exercise programme</div>
+      ${hepList}
+      <form method="POST" action="/admin/hep" style="margin-top:12px;display:grid;gap:8px">
+        <input type="hidden" name="email" value="${esc(email)}">
+        <input name="name" placeholder="Exercise name (e.g. Glute bridge)" required style="${hepDin}">
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <input name="sets" placeholder="Sets" style="width:90px;${hepDin}">
+          <input name="reps" placeholder="Reps" style="width:90px;${hepDin}">
+          <input name="hold" placeholder="Hold (e.g. 10s)" style="width:120px;${hepDin}">
+          <input name="freq" placeholder="Frequency (e.g. 2×/day)" style="flex:1 1 140px;${hepDin}">
+        </div>
+        <textarea name="notes" placeholder="Notes / cues (optional)" rows="2" style="${hepDin}"></textarea>
+        <input name="video" placeholder="Video link (optional, https://…)" style="${hepDin}">
+        <button class="dark" style="margin:0;justify-self:start">Add exercise</button>
+      </form></div>`;
+
   const inner = `${backLink('/admin/patients', 'Patients')}
       ${summary}
       ${progressCard(bookings)}
       <div class="card"><div class="muted" style="margin-bottom:8px">Health &amp; consent form</div>${intakeHtml}${reportHtml}</div>
+      ${hepCard}
       <h2>Session history</h2>
       ${bookings.length ? bookings.map(sessionFileRow).join('') : '<p class="muted">No sessions yet.</p>'}`;
   res.send(adminShell('Patient file', inner, 'patients'));

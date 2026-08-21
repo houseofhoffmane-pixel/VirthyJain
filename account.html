@@ -65,6 +65,7 @@
       <a data-sec="profile" class="active" onclick="showSection('profile')">Profile</a>
       <a data-sec="health" onclick="showSection('health')">Health form</a>
       <a data-sec="bookings" onclick="showSection('bookings')">My bookings</a>
+      <a data-sec="exercises" onclick="showSection('exercises')">My exercises</a>
       <a data-sec="password" onclick="showSection('password')">Password</a>
     </nav>
     <div class="spacer"></div>
@@ -121,6 +122,14 @@
         </div>
       </section>
 
+      <section id="sec-exercises" class="sec" hidden>
+        <div class="card">
+          <h2>My exercises</h2>
+          <p class="lead">Your home exercise programme from Virthy. Do these between sessions.</p>
+          <div id="hepList"><p style="color:#6C7A70">Loading…</p></div>
+        </div>
+      </section>
+
       <section id="sec-password" class="sec" hidden>
         <div class="card">
           <h2>Change password</h2>
@@ -141,10 +150,10 @@ function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,function(c){retur
 function api(path,opts){ return fetch(path,opts).then(function(r){ return r.json().then(function(j){return {ok:r.ok,status:r.status,body:j};}).catch(function(){return {ok:r.ok,status:r.status,body:{}};}); }); }
 function post(path,data){ return api(path,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)}); }
 var me = null;
-var TITLES = { profile:'Profile', health:'Health form', bookings:'My bookings', password:'Password' };
+var TITLES = { profile:'Profile', health:'Health form', bookings:'My bookings', exercises:'My exercises', password:'Password' };
 
 function showSection(key){
-  ['profile','health','bookings','password'].forEach(function(k){ el('sec-'+k).hidden = (k!==key); });
+  ['profile','health','bookings','exercises','password'].forEach(function(k){ el('sec-'+k).hidden = (k!==key); });
   Array.prototype.forEach.call(document.querySelectorAll('.side nav a'), function(a){ a.classList.toggle('active', a.getAttribute('data-sec')===key); });
   el('secTitle').textContent = TITLES[key] || '';
   if(location.hash.slice(1)!==key) history.replaceState(null,'','#'+key);
@@ -181,6 +190,22 @@ function uploadReport(){
   }).catch(function(){ if(m){m.style.color='#B4562F';m.textContent='Network error.';} });
 }
 function removeReport(){ post('/api/intake/report/delete',{}).then(function(){ loadReport(); }); }
+function loadHep(){
+  api('/api/my-hep').then(function(r){
+    var box=el('hepList'); if(!box) return;
+    var list=(r.body&&r.body.exercises)||[];
+    if(!list.length){ box.innerHTML='<p style="color:#6C7A70">No exercises assigned yet. Virthy will add them here.</p>'; return; }
+    box.innerHTML=list.map(function(x){
+      var bits=[x.sets&&x.sets+' sets', x.reps&&x.reps+' reps', x.hold&&'hold '+x.hold, x.freq].filter(Boolean).join(' · ');
+      return '<div style="border:1px solid #E4DED1;border-radius:12px;padding:14px 16px;margin-bottom:10px">'
+        +'<div style="font-weight:600;font-size:16px">'+esc(x.name)+'</div>'
+        +(bits?'<div style="color:#4E7A5E;margin-top:2px">'+esc(bits)+'</div>':'')
+        +(x.notes?'<div style="margin-top:6px;white-space:pre-wrap">'+esc(x.notes)+'</div>':'')
+        +(x.video?'<div style="margin-top:8px">🎬 <a href="'+esc(x.video)+'" target="_blank" rel="noopener">Watch the video</a></div>':'')
+        +'</div>';
+    }).join('');
+  }).catch(function(){});
+}
 function loadHistory(){
   api('/api/my-bookings').then(function(r){
     var h = el('hist');
@@ -260,7 +285,7 @@ api('/api/me').then(function(r){
   me = r.body && r.body.user;
   if(!me){ el('gate').style.display='block'; return; }
   el('panel').style.display='block';
-  render(); loadHistory(); loadIntake(); loadReport();
+  render(); loadHistory(); loadIntake(); loadReport(); loadHep();
   var start = ['profile','health','bookings','password'].indexOf(location.hash.slice(1))>=0 ? location.hash.slice(1) : 'profile';
   showSection(start);
 }).catch(function(){ el('gate').style.display='block'; });
