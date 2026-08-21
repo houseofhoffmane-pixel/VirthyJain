@@ -450,6 +450,7 @@ const ADMIN_NAV = [
   ['/admin/patients', 'Patients', 'patients'],
   ['/admin/calendar', 'Calendar', 'calendar'],
   ['/admin/all', 'All bookings', 'all'],
+  ['/admin/blackouts', 'Block off days', 'blackouts'],
 ];
 function adminShell(title, inner, active) {
   const nav = ADMIN_NAV.map(([href, label, key]) => `<a href="${href}"${active === key ? ' class="active"' : ''}>${label}</a>`).join('');
@@ -543,6 +544,18 @@ app.get('/admin', (req, res) => {
   const upcoming = all.filter((b) => b.status === 'confirmed' && b.starts_at.slice(0, 10) >= today).sort((a, b) => a.starts_at.localeCompare(b.starts_at));
   const toWrapUp = all.filter((b) => b.status === 'confirmed' && b.starts_at.slice(0, 10) < today).sort((a, b) => b.starts_at.localeCompare(a.starts_at));
   const pendingCount = all.filter((b) => b.status === 'pending').length;
+  const inner = `
+      <div style="margin-bottom:8px"><span class="stat"><b>${pendingCount}</b><span>Pending</span></span><span class="stat"><b>${upcoming.length}</b><span>Upcoming</span></span></div>
+      <h2>Requests</h2>
+      ${requests.length ? requests.map(bookingCard).join('') : '<p class="muted">No requests waiting.</p>'}
+      <h2>Upcoming appointments</h2>
+      ${upcoming.length ? upcoming.map(bookingCard).join('') : '<p class="muted">Nothing upcoming.</p>'}
+      ${toWrapUp.length ? '<h2>To wrap up (past sessions)</h2>' + toWrapUp.map(bookingCard).join('') : ''}`;
+  res.send(adminShell('Dashboard', inner, 'dashboard'));
+});
+app.get('/admin/blackouts', (req, res) => {
+  res.type('text/html');
+  if (!adminAuthed(req)) return res.redirect('/admin');
   const blackouts = store.readBlackouts().sort((a, b) => a.from.localeCompare(b.from));
   const dinput = 'padding:8px;border:1px solid #ccc;border-radius:6px;font:inherit';
   const blk = blackouts.length
@@ -552,27 +565,19 @@ app.get('/admin', (req, res) => {
         return `<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;border-bottom:1px solid #E4DED1;padding:8px 0"><span>${range}${time}${bl.reason ? ' <span class="muted">· ' + esc(bl.reason) + '</span>' : ''}</span><form method="POST" action="/admin/blackout/${esc(bl.id)}/delete"><button class="ghost" style="margin:0">Remove</button></form></div>`;
       }).join('')
     : '<p class="muted">No days blocked.</p>';
-  const inner = `
-      <div style="margin-bottom:8px"><span class="stat"><b>${pendingCount}</b><span>Pending</span></span><span class="stat"><b>${upcoming.length}</b><span>Upcoming</span></span></div>
-      <h2>Requests</h2>
-      ${requests.length ? requests.map(bookingCard).join('') : '<p class="muted">No requests waiting.</p>'}
-      <h2>Upcoming appointments</h2>
-      ${upcoming.length ? upcoming.map(bookingCard).join('') : '<p class="muted">Nothing upcoming.</p>'}
-      ${toWrapUp.length ? '<h2>To wrap up (past sessions)</h2>' + toWrapUp.map(bookingCard).join('') : ''}
-      <h2>Block off days</h2>
-      <div class="card">
-        <form method="POST" action="/admin/blackout" style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end">
-          <div><div class="muted">From</div><input type="date" name="from" required style="${dinput}"></div>
-          <div><div class="muted">To (optional)</div><input type="date" name="to" style="${dinput}"></div>
-          <div><div class="muted">Start time (optional)</div><input type="time" name="startTime" style="${dinput}"></div>
-          <div><div class="muted">End time (optional)</div><input type="time" name="endTime" style="${dinput}"></div>
-          <div style="flex:1 1 140px"><div class="muted">Reason</div><input type="text" name="reason" placeholder="Holiday, course…" style="width:100%;${dinput}"></div>
-          <button class="dark" style="margin:0">Block</button>
-        </form>
-        <div class="muted" style="margin-top:6px">Leave the times blank to block whole days. Set a start &amp; end time to block just that window (applies to every day in the range).</div>
-        <div style="margin-top:12px">${blk}</div>
-      </div>`;
-  res.send(adminShell('Dashboard', inner, 'dashboard'));
+  const inner = `<div class="card">
+      <form method="POST" action="/admin/blackout" style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end">
+        <div><div class="muted">From</div><input type="date" name="from" required style="${dinput}"></div>
+        <div><div class="muted">To (optional)</div><input type="date" name="to" style="${dinput}"></div>
+        <div><div class="muted">Start time (optional)</div><input type="time" name="startTime" style="${dinput}"></div>
+        <div><div class="muted">End time (optional)</div><input type="time" name="endTime" style="${dinput}"></div>
+        <div style="flex:1 1 140px"><div class="muted">Reason</div><input type="text" name="reason" placeholder="Holiday, course…" style="width:100%;${dinput}"></div>
+        <button class="dark" style="margin:0">Block</button>
+      </form>
+      <div class="muted" style="margin-top:6px">Leave the times blank to block whole days. Set a start &amp; end time to block just that window (applies to every day in the range).</div>
+      <div style="margin-top:12px">${blk}</div>
+    </div>`;
+  res.send(adminShell('Block off days', inner, 'blackouts'));
 });
 app.get('/admin/all', (req, res) => {
   res.type('text/html');
@@ -695,9 +700,9 @@ app.post('/admin/blackout', (req, res) => {
     const okTime = /^\d{2}:\d{2}$/.test(b.startTime || '') && /^\d{2}:\d{2}$/.test(b.endTime || '') && b.endTime > b.startTime;
     store.addBlackout(b.from, to, b.reason || '', okTime ? b.startTime : '', okTime ? b.endTime : '');
   }
-  res.redirect('/admin');
+  res.redirect('/admin/blackouts');
 });
-app.post('/admin/blackout/:id/delete', (req, res) => { if (!guard(req, res)) return; store.removeBlackout(req.params.id); res.redirect('/admin'); });
+app.post('/admin/blackout/:id/delete', (req, res) => { if (!guard(req, res)) return; store.removeBlackout(req.params.id); res.redirect('/admin/blackouts'); });
 
 // Permanently delete a booking and its data.
 app.post('/admin/booking/:token/delete', (req, res) => {
