@@ -110,8 +110,9 @@ function loadHistory(){
     h.innerHTML = bs.map(function(b){
       var col=b.status==='confirmed'?'#4E7A5E':(b.status==='pending'||b.status==='proposed')?'#B4562F':b.status==='completed'?'#3E5170':'#8A9188';
       var label=b.status==='pending'?'Awaiting confirmation':b.status==='confirmed'?'Confirmed':b.status==='proposed'?'New time proposed — check your email':b.status==='completed'?'Completed':b.status==='cancelled'?'Cancelled':b.status==='rejected'?'Not available':b.status==='declined'?'Please contact us':b.status;
-      return '<div class="hrow"><div><b>'+esc(b.starts_at.slice(0,16))+'</b><br><span style="color:#6C7A70;font-size:13px">'+esc(b.serviceName)+' · '+esc(b.formatName)+'</span></div>'
-        + '<span class="pill" style="align-self:center;background:'+col+'">'+esc(label)+'</span></div>';
+      var rec = b.recommendation ? '<div style="margin-top:8px;background:#EDF1E9;border:1px solid #C4D0BE;border-radius:8px;padding:8px 10px;font-size:13px;white-space:pre-wrap;flex-basis:100%"><b>Recommendation from Virthy:</b> '+esc(b.recommendation)+'</div>' : '';
+      return '<div class="hrow" style="flex-wrap:wrap"><div><b>'+esc(b.starts_at.slice(0,16))+'</b><br><span style="color:#6C7A70;font-size:13px">'+esc(b.serviceName)+' · '+esc(b.formatName)+'</span></div>'
+        + '<span class="pill" style="align-self:center;background:'+col+'">'+esc(label)+'</span>'+rec+'</div>';
     }).join('');
   }).catch(function(){ el('hist').innerHTML='<p style="color:#B4562F">Could not load your bookings.</p>'; });
 }

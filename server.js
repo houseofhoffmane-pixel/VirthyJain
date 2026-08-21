@@ -17,6 +17,7 @@ const store = require('./store');
 const users = require('./users');
 const intakes = require('./intakes');
 const receipt = require('./receipt');
+const secure = require('./secure');
 
 const app = express();
 app.use(express.json());
@@ -172,7 +173,10 @@ app.get('/api/my-bookings', (req, res) => {
   const mine = store.readAll()
     .filter((b) => b.email === user.email)
     .sort((a, b) => b.starts_at.localeCompare(a.starts_at))
-    .map((b) => ({ serviceName: b.serviceName, formatName: b.formatName || b.format, starts_at: b.starts_at, status: b.status }));
+    .map((b) => {
+      const c = secure.decrypt(b.clinicalEnc) || {};
+      return { serviceName: b.serviceName, formatName: b.formatName || b.format, starts_at: b.starts_at, status: b.status, recommendation: c.recommendation || '' };
+    });
   res.json({ bookings: mine });
 });
 
@@ -580,9 +584,13 @@ app.post('/admin/booking/:token/reject', (req, res) => { if (!guard(req, res)) r
 app.post('/admin/booking/:token/cancel', (req, res) => { if (!guard(req, res)) return; actCancel(req.params.token); res.redirect('/admin'); });
 app.post('/admin/booking/:token/reschedule', (req, res) => { if (!guard(req, res)) return; actReschedule(req.params.token, (req.body && req.body.datetime) || ''); res.redirect('/admin'); });
 app.post('/admin/booking/:token/complete', (req, res) => { if (!guard(req, res)) return; actComplete(req.params.token); res.redirect('/admin'); });
-app.post('/admin/booking/:token/note', (req, res) => {
+app.post('/admin/booking/:token/clinical', (req, res) => {
   if (!guard(req, res)) return;
-  const b = store.patch(req.params.token, { sessionNotes: String((req.body && req.body.note) || '') });
+  const bd = req.body || {};
+  const soap = { s: bd.s || '', o: bd.o || '', a: bd.a || '', p: bd.p || '' };
+  const recommendation = String(bd.recommendation || '');
+  const b = store.patch(req.params.token, { clinicalEnc: secure.encrypt({ soap, recommendation }) });
+  if (b && bd.notify && recommendation.trim()) email.patientRecommendation(b, recommendation).catch(() => {});
   res.redirect(b ? '/admin/patient/' + encodeURIComponent(b.email) : '/admin');
 });
 app.post('/admin/booking/:token/paid', async (req, res) => {
@@ -687,12 +695,21 @@ function sessionFileRow(b) {
       <span><span class="pill" style="background:${col}">${esc(b.status)}</span>${pay}</span>
     </div>
     ${b.notes ? `<div class="muted" style="margin-top:6px">Reason given: ${esc(b.notes)}</div>` : ''}
-    <form method="POST" action="/admin/booking/${esc(b.token)}/note" style="margin-top:8px">
-      <div class="muted">Session notes (what happened)</div>
-      <textarea name="note" rows="3" style="width:100%;padding:10px;border:1px solid #C9C2B2;border-radius:8px;font:inherit;box-sizing:border-box">${esc(b.sessionNotes || '')}</textarea>
-      <button class="dark" style="margin-top:6px">Save notes</button>
-    </form>
+    ${clinicalForm(b)}
   </div>`;
+}
+function clinicalForm(b) {
+  const clinical = secure.decrypt(b.clinicalEnc) || {};
+  const soap = clinical.soap || (b.sessionNotes ? { s: b.sessionNotes } : {});
+  const ta = (name, label, val) => `<div style="margin-top:6px"><div class="muted">${label}</div><textarea name="${name}" rows="2" style="width:100%;padding:8px;border:1px solid #C9C2B2;border-radius:8px;font:inherit;box-sizing:border-box">${esc(val || '')}</textarea></div>`;
+  return `<form method="POST" action="/admin/booking/${esc(b.token)}/clinical" style="margin-top:10px">
+    <div style="font-weight:600;font-size:13px">Clinical notes — private (SOAP)</div>
+    ${ta('s', 'Subjective', soap.s)}${ta('o', 'Objective', soap.o)}${ta('a', 'Assessment', soap.a)}${ta('p', 'Plan', soap.p)}
+    <div style="font-weight:600;font-size:13px;margin-top:12px">Recommendation for the patient <span class="muted" style="font-weight:400">(they can see this)</span></div>
+    <textarea name="recommendation" rows="2" style="width:100%;padding:8px;border:1px solid #C9C2B2;border-radius:8px;font:inherit;box-sizing:border-box;margin-top:6px">${esc(clinical.recommendation || '')}</textarea>
+    <label style="display:block;font-size:12px;color:#6C7A70;margin-top:8px"><input type="checkbox" name="notify" style="width:auto;margin-right:6px">Email this recommendation to the patient</label>
+    <button class="dark" style="margin-top:8px">Save</button>
+  </form>`;
 }
 
 // Patients directory — searchable by name.
@@ -842,7 +859,7 @@ app.get('/account', (_req, res) => {
 app.get('/:file', (req, res, next) => {
   const name = req.params.file;
   if (!/^[\w.-]+\.(js|css|png|jpg|jpeg|svg|ico|webp|woff2?)$/.test(name)) return next();
-  if (['server.js', 'config.js', 'availability.js', 'email.js', 'store.js', 'users.js', 'intakes.js', 'receipt.js'].includes(name)) return next();
+  if (['server.js', 'config.js', 'availability.js', 'email.js', 'store.js', 'users.js', 'intakes.js', 'receipt.js', 'secure.js'].includes(name)) return next();
   const p = path.join(__dirname, name);
   if (fs.existsSync(p)) return res.sendFile(p);
   next();

@@ -210,6 +210,20 @@ async function patientProposalDeclined(b) {
   );
 }
 
+// --- to patient: a recommendation from a session ----------------------------
+async function patientRecommendation(b, text) {
+  const body =
+    `<p style="margin:0 0 14px">Hi ${esc(first(b))} — Virthy has added a recommendation from your ${esc(b.serviceName)} session:</p>` +
+    `<div style="background:#F7F4EE;border:1px solid #E4DED1;border-radius:10px;padding:12px 14px;white-space:pre-wrap;font-size:14px;line-height:1.6">${esc(text)}</div>` +
+    (SITE ? `<p style="margin:14px 0 0;font-size:13.5px;color:#6C7A70">You can always see this in <a href="${SITE}/account">your account</a>.</p>` : '');
+  await send(
+    b.email,
+    'A recommendation from your session',
+    `Hi ${first(b)},\n\nVirthy's recommendation from your ${b.serviceName} session:\n\n${text}\n\nYou can see it any time in your account.\n— Virthy Jain Physiotherapy`,
+    shell({ accent: '#4E7A5E', badge: 'From your session', badgeColor: '#4E7A5E', heading: 'A note from Virthy', bodyHtml: body, preheader: 'Virthy added a recommendation for you.' }),
+  );
+}
+
 // --- to patient: appointment reminder ---------------------------------------
 async function patientReminder(b) {
   const body =
@@ -293,4 +307,4 @@ async function practitionerRequested(b, acceptUrl, rejectUrl) {
     shell({ accent: '#16201C', badge: 'New request', badgeColor: '#B4562F', heading: 'New booking request', bodyHtml: body, preheader: `${b.name} — ${b.serviceName} on ${prettyWhen(b)}` }));
 }
 
-module.exports = { practitionerRequested, patientRequested, patientConfirmed, patientRejected, patientCancelled, patientRescheduled, patientProposed, patientProposalDeclined, patientSessionDone, patientReminder, patientReceipt, passwordReset };
+module.exports = { practitionerRequested, patientRequested, patientConfirmed, patientRejected, patientCancelled, patientRescheduled, patientProposed, patientProposalDeclined, patientSessionDone, patientReminder, patientReceipt, patientRecommendation, passwordReset };
