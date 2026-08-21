@@ -954,7 +954,6 @@ function progressCard(bookings) {
 app.get('/admin/patients', (req, res) => {
   res.type('text/html');
   if (!adminAuthed(req)) return res.redirect('/admin');
-  const q = String(req.query.q || '').trim().toLowerCase();
   const bookings = store.readAll();
   const byEmail = new Map();
   (users.list() || []).forEach((u) => byEmail.set(u.email, { name: u.name, email: u.email, phone: u.phone }));
@@ -966,14 +965,15 @@ app.get('/admin/patients', (req, res) => {
     const next = mine.filter((b) => ['confirmed', 'pending', 'proposed'].includes(b.status) && b.starts_at.slice(0, 10) >= today).sort((a, b) => a.starts_at.localeCompare(b.starts_at))[0];
     return { ...p, completed, next };
   });
-  if (q) patients = patients.filter((p) => (p.name || '').toLowerCase().includes(q) || (p.email || '').toLowerCase().includes(q) || (p.phone || '').toLowerCase().includes(q));
   patients.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
-  const rows = patients.length ? patients.map((p) => `<a href="/admin/patient/${encodeURIComponent(p.email)}" style="text-decoration:none;color:inherit"><div class="card" style="display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap">
+  const rows = patients.length ? patients.map((p) => `<a class="patrow" data-search="${esc(((p.name || '') + ' ' + (p.email || '') + ' ' + (p.phone || '')).toLowerCase())}" href="/admin/patient/${encodeURIComponent(p.email)}" style="display:block;text-decoration:none;color:inherit"><div class="card" style="display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap">
       <div><b>${esc(p.name || p.email)}</b><br><span class="muted">${esc(p.email)}${p.phone ? ' · ' + esc(p.phone) : ''}</span></div>
       <div class="muted" style="text-align:right">${p.completed} session${p.completed === 1 ? '' : 's'}${p.next ? '<br><span style="color:#4E7A5E">Next: ' + esc(p.next.starts_at.slice(0, 16)) + '</span>' : ''}</div>
-    </div></a>`).join('') : '<p class="muted">No patients found.</p>';
-  const search = `<form method="GET" action="/admin/patients" style="margin-bottom:14px;display:flex;gap:8px;flex-wrap:wrap"><input type="text" name="q" value="${esc(req.query.q || '')}" placeholder="Search patient by name" style="flex:1 1 220px;padding:10px;border:1px solid #C9C2B2;border-radius:8px;font:inherit"><button class="dark" style="margin:0">Search</button></form>`;
-  res.send(adminShell('Patients', `${search}${rows}`, 'patients'));
+    </div></a>`).join('') : '<p class="muted">No patients yet.</p>';
+  const search = `<div style="margin-bottom:14px"><input id="patSearch" type="text" oninput="filterPatients()" value="${esc(req.query.q || '')}" placeholder="Search by name, email or phone…" autocomplete="off" style="width:100%;padding:10px;border:1px solid #C9C2B2;border-radius:8px;font:inherit"></div>`;
+  const script = `<p id="patNone" class="muted" style="display:none">No patients match your search.</p>
+<script>function filterPatients(){var q=document.getElementById('patSearch').value.trim().toLowerCase();var rows=document.querySelectorAll('.patrow');var shown=0;rows.forEach(function(el){var hit=!q||el.getAttribute('data-search').indexOf(q)>-1;el.style.display=hit?'block':'none';if(hit)shown++;});var none=document.getElementById('patNone');if(none)none.style.display=(rows.length&&!shown)?'block':'none';}filterPatients();</script>`;
+  res.send(adminShell('Patients', `${search}${rows}${script}`, 'patients'));
 });
 
 // One patient's digital file: summary, health form, and session history.
