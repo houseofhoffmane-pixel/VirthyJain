@@ -69,8 +69,10 @@ function slotsForDate(service, formatKey, dateStr, existingSameDate, blackout) {
       if (startStr < threshold) continue; // past or inside notice window
 
       const clash = existingSameDate.some((b) => conflicts(m, m + service.duration, formatKey, b));
-      // Blocked if the slot overlaps any partial-day block-out window.
-      const blocked = blk ? blk.some((w) => m < w[1] && w[0] < m + service.duration) : false;
+      // Blocked if the slot overlaps any block-out window. The end time is
+      // inclusive, so a slot starting exactly at the end time is also blocked
+      // (e.g. blocking "…–15:15" removes the 15:15 slot too).
+      const blocked = blk ? blk.some((w) => m <= w[1] && w[0] < m + service.duration) : false;
       slots.push({ label, start: `${startStr}:00`, free: !clash && !blocked });
     }
   }
