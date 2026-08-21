@@ -104,6 +104,9 @@ function updateStatus(token, status) {
   return b;
 }
 
+// Permanently delete a booking (and its data) by token.
+function remove(token) { return writeAll(readAll().filter((b) => b.token !== token)); }
+
 // Set arbitrary fields on a booking (e.g. { paid: true }).
 function patch(token, fields) {
   const list = readAll();
@@ -116,6 +119,6 @@ function patch(token, fields) {
 }
 
 module.exports = {
-  FILE, readAll, writeAll, activeBookings, findByToken, add, updateStatus, patch,
+  FILE, readAll, writeAll, activeBookings, findByToken, add, updateStatus, patch, remove,
   readBlackouts, addBlackout, removeBlackout, blackoutDates, blackoutMap,
 };

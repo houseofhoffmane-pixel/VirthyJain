@@ -492,6 +492,10 @@ function reForm(token) {
 function proposeLink(token) {
   return `<a href="/admin/booking/${esc(token)}/propose" style="display:inline-block;background:#fff;border:1px solid #999;color:#16201C;border-radius:8px;padding:8px 14px;font-size:13px;margin:6px 6px 0 0;text-decoration:none">Propose new time</a>`;
 }
+// Delete requires typing "delete" to confirm; permanently removes the booking.
+function deleteBtn(token, backEmail) {
+  return `<form method="POST" action="/admin/booking/${esc(token)}/delete" style="display:inline" onsubmit="return (prompt('Type delete to permanently remove this booking and all its data')||'').trim().toLowerCase()==='delete'">${backEmail ? `<input type="hidden" name="back" value="${esc(backEmail)}">` : ''}<button class="ghost" style="color:#B4562F;border-color:#B4562F">Delete</button></form>`;
+}
 function paidControl(b) {
   const svc = serviceById(b.serviceId);
   const val = b.paid ? (b.paidAmount != null ? b.paidAmount : '') : (svc ? svc.price : '');
@@ -526,7 +530,7 @@ function bookingCard(b) {
     <div class="muted"><a href="/admin/patient/${encodeURIComponent(b.email)}">Patient &amp; health form ${intakes.has(b.email) ? '✓' : '⚠ not completed'}</a></div>
     ${b.referrer ? `<div class="muted">Referred by: ${esc(b.referrer)}</div>` : ''}
     ${b.notes ? `<div class="notes">${esc(b.notes)}</div>` : ''}
-    ${actions ? `<div style="margin-top:6px">${actions}</div>` : ''}
+    <div style="margin-top:6px">${actions}${deleteBtn(b.token)}</div>
   </div>`;
 }
 
@@ -695,6 +699,14 @@ app.post('/admin/blackout', (req, res) => {
 });
 app.post('/admin/blackout/:id/delete', (req, res) => { if (!guard(req, res)) return; store.removeBlackout(req.params.id); res.redirect('/admin'); });
 
+// Permanently delete a booking and its data.
+app.post('/admin/booking/:token/delete', (req, res) => {
+  if (!guard(req, res)) return;
+  store.remove(req.params.token);
+  const back = req.body && req.body.back ? '/admin/patient/' + encodeURIComponent(req.body.back) : '/admin';
+  res.redirect(back);
+});
+
 // A session in the patient file: status, payment, reason, and clinical notes.
 function sessionFileRow(b) {
   const svc = serviceById(b.serviceId);
@@ -709,6 +721,7 @@ function sessionFileRow(b) {
     </div>
     ${b.notes ? `<div class="muted" style="margin-top:6px">Reason given: ${esc(b.notes)}</div>` : ''}
     ${clinicalForm(b)}
+    <div style="margin-top:8px">${deleteBtn(b.token, b.email)}</div>
   </div>`;
 }
 function clinicalForm(b) {
