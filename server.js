@@ -546,6 +546,7 @@ const ADMIN_NAV = [
   ['/admin/all', 'All bookings', 'all'],
   ['/admin/blackouts', 'Block off days', 'blackouts'],
   ['/admin/file-labels', 'File labels', 'filelabels'],
+  ['/admin/revenue', 'Revenue', 'revenue'],
   ['/admin/settings', 'Services & hours', 'settings'],
 ];
 function adminShell(title, inner, active) {
@@ -941,6 +942,74 @@ app.post('/admin/hep/:id/delete', (req, res) => {
   if (!guard(req, res)) return;
   hep.remove(req.params.id);
   res.redirect('/admin/patient/' + encodeURIComponent(String((req.body && req.body.email) || '')));
+});
+
+// --- revenue: summary + accountant CSV export ------------------------------
+const receiptNo = (b) => 'R-' + (b.token ? b.token.slice(0, 8).toUpperCase() : '');
+function revenueRows(fromQ, toQ) {
+  const from = /^\d{4}-\d{2}-\d{2}$/.test(fromQ || '') ? fromQ : '';
+  const to = /^\d{4}-\d{2}-\d{2}$/.test(toQ || '') ? toQ : '';
+  return store.readAll()
+    .filter((b) => b.paid)
+    .filter((b) => { const d = (b.starts_at || '').slice(0, 10); return (!from || d >= from) && (!to || d <= to); })
+    .sort((a, b) => (a.starts_at || '').localeCompare(b.starts_at || ''));
+}
+app.get('/admin/revenue', (req, res) => {
+  res.type('text/html');
+  if (!adminAuthed(req)) return res.redirect('/admin');
+  const from = /^\d{4}-\d{2}-\d{2}$/.test(req.query.from || '') ? req.query.from : '';
+  const to = /^\d{4}-\d{2}-\d{2}$/.test(req.query.to || '') ? req.query.to : '';
+  const rows = revenueRows(from, to);
+  const total = rows.reduce((s, b) => s + (Number(b.paidAmount) || 0), 0);
+  const today = A.todayLocal();
+  const outstanding = store.readAll().filter((b) => b.status === 'completed' && !b.paid && (b.starts_at || '').slice(0, 10) <= today);
+  const din = 'padding:9px;border:1px solid #C9C2B2;border-radius:8px;font:inherit';
+  const qs = `from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`;
+  const filter = `<form method="GET" action="/admin/revenue" style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;margin-bottom:14px">
+      <div><div class="muted">From</div><input type="date" name="from" value="${esc(from)}" style="${din}"></div>
+      <div><div class="muted">To</div><input type="date" name="to" value="${esc(to)}" style="${din}"></div>
+      <button class="dark" style="margin:0">Filter</button>
+      <a href="/admin/revenue" class="ghost" style="margin:0;text-decoration:none;padding:9px 14px;border-radius:8px;border:1px solid #C9C2B2">Clear</a>
+    </form>`;
+  const stats = `<div class="card"><div style="margin-bottom:6px">
+      <span class="stat"><b>€${total.toFixed(2)}</b><span>Paid in range</span></span>
+      <span class="stat"><b>${rows.length}</b><span>Paid sessions</span></span>
+      <span class="stat"><b>${outstanding.length}</b><span>Completed &amp; unpaid</span></span>
+    </div><a class="dark" href="/admin/revenue.csv?${qs}" style="display:inline-block;text-decoration:none;padding:10px 16px;border-radius:8px;margin-top:6px">Download CSV</a></div>`;
+  const table = rows.length
+    ? `<div class="card" style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:14px">
+        <thead><tr style="text-align:left">${['Date', 'Patient', 'Service', 'Format', 'Amount', 'Receipt'].map((h) => `<th class="muted" style="padding:6px 10px 6px 0">${h}</th>`).join('')}</tr></thead>
+        <tbody>${rows.map((b) => `<tr style="border-top:1px solid #E4DED1">
+          <td style="padding:6px 10px 6px 0;white-space:nowrap">${esc((b.starts_at || '').slice(0, 16))}</td>
+          <td style="padding:6px 10px 6px 0">${esc(b.name || b.email || '')}</td>
+          <td style="padding:6px 10px 6px 0">${esc(b.serviceName || '')}</td>
+          <td style="padding:6px 10px 6px 0">${esc(b.formatName || b.format || '')}</td>
+          <td style="padding:6px 10px 6px 0;white-space:nowrap">€${(Number(b.paidAmount) || 0).toFixed(2)}</td>
+          <td style="padding:6px 10px 6px 0;white-space:nowrap">${esc(receiptNo(b))}</td></tr>`).join('')}</tbody></table></div>`
+    : '<p class="muted">No paid sessions in this range.</p>';
+  const outHtml = outstanding.length
+    ? `<div class="card"><div class="muted" style="margin-bottom:8px">Completed but not marked paid</div>${outstanding.sort((a, b) => (a.starts_at || '').localeCompare(b.starts_at)).map((b) => `<div style="border-bottom:1px solid #E4DED1;padding:7px 0;display:flex;justify-content:space-between;gap:10px"><span>${esc((b.starts_at || '').slice(0, 16))} · ${esc(b.name || b.email)} · ${esc(b.serviceName || '')}</span><a href="/admin/patient/${encodeURIComponent(b.email)}">Open</a></div>`).join('')}</div>`
+    : '';
+  res.send(adminShell('Revenue', `${filter}${stats}${table}${outHtml}`, 'revenue'));
+});
+app.get('/admin/revenue.csv', (req, res) => {
+  if (!adminAuthed(req)) return res.redirect('/admin');
+  const rows = revenueRows(req.query.from, req.query.to);
+  const q = (v) => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"';
+  const header = ['Date', 'Time', 'Patient', 'Email', 'Phone', 'Service', 'Format', 'Amount (EUR)', 'Receipt no.'];
+  const lines = [header.map(q).join(',')];
+  for (const b of rows) {
+    lines.push([
+      (b.starts_at || '').slice(0, 10), (b.starts_at || '').slice(11, 16),
+      b.name || '', b.email || '', b.phone || '', b.serviceName || '', b.formatName || b.format || '',
+      (Number(b.paidAmount) || 0).toFixed(2), receiptNo(b),
+    ].map(q).join(','));
+  }
+  const total = rows.reduce((s, b) => s + (Number(b.paidAmount) || 0), 0);
+  lines.push(['', '', '', '', '', '', 'TOTAL', total.toFixed(2), ''].map(q).join(','));
+  res.set('Content-Type', 'text/csv; charset=utf-8');
+  res.set('Content-Disposition', `attachment; filename="revenue-${A.todayLocal()}.csv"`);
+  res.send('﻿' + lines.join('\r\n') + '\r\n');
 });
 
 // Permanently delete a booking and its data.
