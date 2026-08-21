@@ -111,8 +111,11 @@ function loadHistory(){
       var col=b.status==='confirmed'?'#4E7A5E':(b.status==='pending'||b.status==='proposed')?'#B4562F':b.status==='completed'?'#3E5170':'#8A9188';
       var label=b.status==='pending'?'Awaiting confirmation':b.status==='confirmed'?'Confirmed':b.status==='proposed'?'New time proposed — check your email':b.status==='completed'?'Completed':b.status==='cancelled'?'Cancelled':b.status==='rejected'?'Not available':b.status==='declined'?'Please contact us':b.status;
       var rec = b.recommendation ? '<div style="margin-top:8px;background:#EDF1E9;border:1px solid #C4D0BE;border-radius:8px;padding:8px 10px;font-size:13px;white-space:pre-wrap;flex-basis:100%"><b>Recommendation from Virthy:</b> '+esc(b.recommendation)+'</div>' : '';
+      var actions = (b.status==='proposed' && b.token) ? '<div style="flex-basis:100%;margin-top:10px">'
+        + '<button onclick="acceptProposed(\''+esc(b.token)+'\')" style="background:#4E7A5E;color:#fff;border:none;border-radius:999px;padding:9px 18px;cursor:pointer;font:inherit;margin-right:8px">Accept new time</button>'
+        + '<button onclick="rejectProposed(\''+esc(b.token)+'\')" style="background:#B4562F;color:#fff;border:none;border-radius:999px;padding:9px 18px;cursor:pointer;font:inherit">Doesn\'t suit</button></div>' : '';
       return '<div class="hrow" style="flex-wrap:wrap"><div><b>'+esc(b.starts_at.slice(0,16))+'</b><br><span style="color:#6C7A70;font-size:13px">'+esc(b.serviceName)+' · '+esc(b.formatName)+'</span></div>'
-        + '<span class="pill" style="align-self:center;background:'+col+'">'+esc(label)+'</span>'+rec+'</div>';
+        + '<span class="pill" style="align-self:center;background:'+col+'">'+esc(label)+'</span>'+rec+actions+'</div>';
     }).join('');
   }).catch(function(){ el('hist').innerHTML='<p style="color:#B4562F">Could not load your bookings.</p>'; });
 }
@@ -131,6 +134,18 @@ function changePw(){
   }).catch(function(){ m.style.color='#B4562F'; m.textContent='Network error.'; });
 }
 function signOut(){ post('/api/logout',{}).then(function(){ window.location='/'; }); }
+function acceptProposed(token){
+  post('/api/booking/'+token+'/accept',{}).then(function(r){
+    if(r.ok){ loadHistory(); } else { alert('Could not accept — please use the link in your email.'); }
+  }).catch(function(){ alert('Network error. Please try again.'); });
+}
+function rejectProposed(token){
+  if(!confirm('Decline this proposed time?')) return;
+  post('/api/booking/'+token+'/reject',{}).then(function(r){
+    if(r.ok){ alert('That time is released. Please contact Virthy to arrange a time that suits you, then book again.'); loadHistory(); }
+    else { alert('Could not update. Please try again.'); }
+  }).catch(function(){ alert('Network error. Please try again.'); });
+}
 
 // --- intake / consent form --------------------------------------------------
 var intakeFields=[], intakeConsents=[];

@@ -179,9 +179,34 @@ app.get('/api/my-bookings', (req, res) => {
     .sort((a, b) => b.starts_at.localeCompare(a.starts_at))
     .map((b) => {
       const c = secure.decrypt(b.clinicalEnc) || {};
-      return { serviceName: b.serviceName, formatName: b.formatName || b.format, starts_at: b.starts_at, status: b.status, recommendation: c.recommendation || '' };
+      return { serviceName: b.serviceName, formatName: b.formatName || b.format, starts_at: b.starts_at, status: b.status, recommendation: c.recommendation || '', token: b.status === 'proposed' ? b.token : undefined };
     });
   res.json({ bookings: mine });
+});
+
+// Patient accepts / rejects a proposed time from their account (same as the
+// email links). Verifies the booking belongs to the signed-in user.
+app.post('/api/booking/:token/accept', (req, res) => {
+  const user = currentUser(req);
+  if (!user) return res.status(401).json({ error: 'login_required' });
+  const b = store.findByToken(req.params.token);
+  if (!b || (b.email || '').toLowerCase() !== user.email.toLowerCase()) return res.status(404).json({ error: 'not_found' });
+  if (b.status === 'proposed') {
+    const nb = store.updateStatus(b.token, 'confirmed');
+    email.patientConfirmed(nb, { needsIntake: !intakes.has(nb.email) }).catch(() => {});
+  }
+  res.json({ ok: true, status: 'confirmed' });
+});
+app.post('/api/booking/:token/reject', (req, res) => {
+  const user = currentUser(req);
+  if (!user) return res.status(401).json({ error: 'login_required' });
+  const b = store.findByToken(req.params.token);
+  if (!b || (b.email || '').toLowerCase() !== user.email.toLowerCase()) return res.status(404).json({ error: 'not_found' });
+  if (b.status === 'proposed') {
+    const nb = store.updateStatus(b.token, 'declined');
+    email.patientProposalDeclined(nb).catch(() => {});
+  }
+  res.json({ ok: true, status: 'declined' });
 });
 
 app.get('/health', (_req, res) => res.json({ ok: true, store: store.FILE }));
