@@ -41,10 +41,20 @@ function conflicts(candStartMin, candEndMin, candFormat, existing) {
   return !clear;
 }
 
+// Blocked windows for a date. Accepts a Map (date -> [[startMin,endMin],…]) or,
+// for backward compatibility, a Set of whole-day dates.
+function blackoutWindows(blackout, dateStr) {
+  if (!blackout) return null;
+  if (typeof blackout.get === 'function') return blackout.get(dateStr) || null;
+  if (typeof blackout.has === 'function') return blackout.has(dateStr) ? [[0, 1440]] : null;
+  return null;
+}
+
 // --- slots for one date/service/format -------------------------------------
 function slotsForDate(service, formatKey, dateStr, existingSameDate, blackout) {
-  // A blocked-off day (holiday / course) is treated as non-working.
-  if (blackout && blackout.has(dateStr)) return { date: dateStr, working: false, slots: [] };
+  const blk = blackoutWindows(blackout, dateStr);
+  // Whole-day block => treat the day as non-working.
+  if (blk && blk.some((w) => w[0] <= 0 && w[1] >= 1440)) return { date: dateStr, working: false, slots: [] };
   const windows = (config.hours[formatKey] || {})[weekdayOf(dateStr)] || [];
   const working = windows.length > 0;
   const threshold = localOfInstant(Date.now() + config.minNoticeHours * 3600e3); // "YYYY-MM-DD HH:MM"
@@ -58,10 +68,10 @@ function slotsForDate(service, formatKey, dateStr, existingSameDate, blackout) {
       const startStr = `${dateStr} ${label}`;
       if (startStr < threshold) continue; // past or inside notice window
 
-      const free = !existingSameDate.some((b) =>
-        conflicts(m, m + service.duration, formatKey, b),
-      );
-      slots.push({ label, start: `${startStr}:00`, free });
+      const clash = existingSameDate.some((b) => conflicts(m, m + service.duration, formatKey, b));
+      // Blocked if the slot overlaps any partial-day block-out window.
+      const blocked = blk ? blk.some((w) => m < w[1] && w[0] < m + service.duration) : false;
+      slots.push({ label, start: `${startStr}:00`, free: !clash && !blocked });
     }
   }
   // de-dup (overlapping windows) keeping the "taken" state if any

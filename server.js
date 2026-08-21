@@ -199,12 +199,12 @@ app.get('/api/availability', (req, res) => {
   if (!service || !format) return res.status(400).json({ error: 'bad_request' });
   const from = /^\d{4}-\d{2}-\d{2}$/.test(req.query.from || '') ? req.query.from : A.todayLocal();
   const to = /^\d{4}-\d{2}-\d{2}$/.test(req.query.to || '') ? req.query.to : A.addDays(from, config.horizonDays);
-  res.json({ timezone: config.timezone, days: A.computeRange(service, format.key, from, to, activeForAvailability(), store.blackoutDates()) });
+  res.json({ timezone: config.timezone, days: A.computeRange(service, format.key, from, to, activeForAvailability(), store.blackoutMap()) });
 });
 
 function nextFree(service, formatKey, count = 3) {
   const today = A.todayLocal();
-  const days = A.computeRange(service, formatKey, today, A.addDays(today, config.horizonDays), activeForAvailability(), store.blackoutDates());
+  const days = A.computeRange(service, formatKey, today, A.addDays(today, config.horizonDays), activeForAvailability(), store.blackoutMap());
   const out = [];
   for (const d of days) for (const s of d.slots) if (s.free) { out.push(s.start); if (out.length >= count) return out; }
   return out;
@@ -234,7 +234,7 @@ app.post('/api/bookings', async (req, res) => {
   const date = b.start.slice(0, 10);
   const sameDate = store.activeBookings().filter((x) => x.starts_at.slice(0, 10) === date)
     .map((x) => ({ starts_at: x.starts_at, ends_at: x.ends_at, format: x.format }));
-  if (!A.isFreeSlot(service, format.key, b.start, sameDate, store.blackoutDates())) {
+  if (!A.isFreeSlot(service, format.key, b.start, sameDate, store.blackoutMap())) {
     return res.status(409).json({ error: 'slot_taken', alternatives: nextFree(service, format.key, 3) });
   }
 
@@ -542,7 +542,11 @@ app.get('/admin', (req, res) => {
   const blackouts = store.readBlackouts().sort((a, b) => a.from.localeCompare(b.from));
   const dinput = 'padding:8px;border:1px solid #ccc;border-radius:6px;font:inherit';
   const blk = blackouts.length
-    ? blackouts.map((bl) => `<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;border-bottom:1px solid #E4DED1;padding:8px 0"><span>${esc(bl.from)}${bl.to && bl.to !== bl.from ? ' → ' + esc(bl.to) : ''}${bl.reason ? ' <span class="muted">· ' + esc(bl.reason) + '</span>' : ''}</span><form method="POST" action="/admin/blackout/${esc(bl.id)}/delete"><button class="ghost" style="margin:0">Remove</button></form></div>`).join('')
+    ? blackouts.map((bl) => {
+        const range = esc(bl.from) + (bl.to && bl.to !== bl.from ? ' → ' + esc(bl.to) : '');
+        const time = (bl.startTime && bl.endTime) ? ` <b>${esc(bl.startTime)}–${esc(bl.endTime)}</b>` : ' <span class="muted">(all day)</span>';
+        return `<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;border-bottom:1px solid #E4DED1;padding:8px 0"><span>${range}${time}${bl.reason ? ' <span class="muted">· ' + esc(bl.reason) + '</span>' : ''}</span><form method="POST" action="/admin/blackout/${esc(bl.id)}/delete"><button class="ghost" style="margin:0">Remove</button></form></div>`;
+      }).join('')
     : '<p class="muted">No days blocked.</p>';
   const inner = `
       <div style="margin-bottom:8px"><span class="stat"><b>${pendingCount}</b><span>Pending</span></span><span class="stat"><b>${upcoming.length}</b><span>Upcoming</span></span></div>
@@ -556,9 +560,12 @@ app.get('/admin', (req, res) => {
         <form method="POST" action="/admin/blackout" style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end">
           <div><div class="muted">From</div><input type="date" name="from" required style="${dinput}"></div>
           <div><div class="muted">To (optional)</div><input type="date" name="to" style="${dinput}"></div>
+          <div><div class="muted">Start time (optional)</div><input type="time" name="startTime" style="${dinput}"></div>
+          <div><div class="muted">End time (optional)</div><input type="time" name="endTime" style="${dinput}"></div>
           <div style="flex:1 1 140px"><div class="muted">Reason</div><input type="text" name="reason" placeholder="Holiday, course…" style="width:100%;${dinput}"></div>
           <button class="dark" style="margin:0">Block</button>
         </form>
+        <div class="muted" style="margin-top:6px">Leave the times blank to block whole days. Set a start &amp; end time to block just that window (applies to every day in the range).</div>
         <div style="margin-top:12px">${blk}</div>
       </div>`;
   res.send(adminShell('Dashboard', inner, 'dashboard'));
@@ -625,7 +632,7 @@ app.get('/admin/booking/:token/propose', (req, res) => {
   if (!b) return res.send(adminShell('Propose new time', '<div class="card">Not found.</div>', 'dashboard'));
   const service = serviceById(b.serviceId), format = formatByKey(b.format);
   const today = A.todayLocal();
-  const days = A.computeRange(service, format.key, today, A.addDays(today, config.horizonDays), activeForAvailability(), store.blackoutDates());
+  const days = A.computeRange(service, format.key, today, A.addDays(today, config.horizonDays), activeForAvailability(), store.blackoutMap());
   let opts = '';
   for (const d of days) for (const s of d.slots) if (s.free) opts += `<option value="${esc(s.start)}">${esc(dayLabel(d.date))} · ${esc(s.label)}</option>`;
   const summary = `<p style="font-size:15px;line-height:1.6"><b>${esc(b.serviceName)}</b> — ${esc(b.formatName || b.format)}<br>Requested: ${esc(b.starts_at.slice(0, 16))}<br>${esc(b.name)} · ${esc(b.email)}${b.phone ? ' · ' + esc(b.phone) : ''}</p>`;
@@ -681,7 +688,8 @@ app.post('/admin/blackout', (req, res) => {
   const b = req.body || {};
   if (/^\d{4}-\d{2}-\d{2}$/.test(b.from || '')) {
     const to = /^\d{4}-\d{2}-\d{2}$/.test(b.to || '') && b.to >= b.from ? b.to : b.from;
-    store.addBlackout(b.from, to, b.reason || '');
+    const okTime = /^\d{2}:\d{2}$/.test(b.startTime || '') && /^\d{2}:\d{2}$/.test(b.endTime || '') && b.endTime > b.startTime;
+    store.addBlackout(b.from, to, b.reason || '', okTime ? b.startTime : '', okTime ? b.endTime : '');
   }
   res.redirect('/admin');
 });
@@ -841,14 +849,20 @@ app.get('/admin/calendar', (req, res) => {
   const monday = mondayOf(anchor);
   const prev = A.addDays(monday, -7), next = A.addDays(monday, 7);
   const active = store.activeBookings();
-  const blk = store.blackoutDates();
+  const blkMap = store.blackoutMap();
+  const fmtMin = (m) => `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
   let daysHtml = '';
   for (let i = 0; i < 7; i++) {
     const d = A.addDays(monday, i);
+    const wins = blkMap.get(d);
+    const fullDay = wins && wins.some((w) => w[0] <= 0 && w[1] >= 1440);
+    const blockNote = !wins ? '' : fullDay
+      ? '<div style="color:#B4562F;font-size:13px;font-weight:600">Blocked off (all day)</div>'
+      : wins.map((w) => `<div style="color:#B4562F;font-size:12px">Blocked ${fmtMin(w[0])}–${fmtMin(w[1])}</div>`).join('');
     const dayBookings = active.filter((b) => b.starts_at.slice(0, 10) === d).sort((a, b) => a.starts_at.localeCompare(b.starts_at));
-    const items = blk.has(d)
-      ? '<div style="color:#B4562F;font-size:13px">Blocked off</div>'
-      : dayBookings.length
+    const items = fullDay
+      ? blockNote
+      : (blockNote + (dayBookings.length
       ? dayBookings.map((b) => {
           const col = b.status === 'confirmed' ? '#4E7A5E' : b.status === 'pending' ? '#B4562F' : '#8a6d3b';
           return `<a href="/admin/patient/${encodeURIComponent(b.email)}" style="display:block;text-decoration:none;color:inherit;padding:8px 0;border-top:1px solid #EFEAE0">
@@ -856,7 +870,7 @@ app.get('/admin/calendar', (req, res) => {
             <div style="font-size:13px;color:#3D4A42;margin:2px 0 5px;overflow-wrap:anywhere">${esc(b.name)} · ${esc(b.serviceName)}</div>
             <span class="pill" style="background:${col}">${esc(b.status)}</span></a>`;
         }).join('')
-      : '<div class="muted">—</div>';
+      : (blockNote ? '' : '<div class="muted">—</div>')));
     daysHtml += `<div class="card"><div style="font-weight:700;margin-bottom:4px">${esc(dayLabel(d))}</div>${items}</div>`;
   }
   const inner = `

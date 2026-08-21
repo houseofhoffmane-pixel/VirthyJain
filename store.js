@@ -47,21 +47,40 @@ function writeBlackouts(list) {
   try { fs.writeFileSync(BLACKOUTS_FILE, JSON.stringify(list, null, 2)); return true; }
   catch (e) { console.error('[store] blackouts write', e.message); return false; }
 }
-function addBlackout(from, to, reason) {
+// startTime/endTime are optional 'HH:MM'. Both present => only that window is
+// blocked each day; otherwise the whole day is blocked.
+function addBlackout(from, to, reason, startTime, endTime) {
   const list = readBlackouts();
-  const rec = { id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6), from, to: to || from, reason: reason || '' };
+  const rec = {
+    id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+    from, to: to || from, reason: reason || '',
+    startTime: startTime || '', endTime: endTime || '',
+  };
   list.push(rec);
   writeBlackouts(list);
   return rec;
 }
 function removeBlackout(id) { writeBlackouts(readBlackouts().filter((x) => x.id !== id)); }
-// Set of every blocked 'YYYY-MM-DD'.
+const hmToMin = (hm) => Number(hm.slice(0, 2)) * 60 + Number(hm.slice(3, 5));
+// Map of 'YYYY-MM-DD' -> array of [startMin, endMin] blocked windows.
+// A whole-day block is [0, 1440].
+function blackoutMap() {
+  const map = new Map();
+  for (const bl of readBlackouts()) {
+    const win = (bl.startTime && bl.endTime) ? [hmToMin(bl.startTime), hmToMin(bl.endTime)] : [0, 1440];
+    let d = bl.from; const end = bl.to || bl.from; let guard = 0;
+    while (d <= end && guard++ < 400) {
+      if (!map.has(d)) map.set(d, []);
+      map.get(d).push(win);
+      d = addOneDay(d);
+    }
+  }
+  return map;
+}
+// Backward-compat: Set of days that are blocked for the WHOLE day.
 function blackoutDates() {
   const set = new Set();
-  for (const bl of readBlackouts()) {
-    let d = bl.from; const end = bl.to || bl.from; let guard = 0;
-    while (d <= end && guard++ < 400) { set.add(d); d = addOneDay(d); }
-  }
+  for (const [d, wins] of blackoutMap()) if (wins.some((w) => w[0] <= 0 && w[1] >= 1440)) set.add(d);
   return set;
 }
 
@@ -98,5 +117,5 @@ function patch(token, fields) {
 
 module.exports = {
   FILE, readAll, writeAll, activeBookings, findByToken, add, updateStatus, patch,
-  readBlackouts, addBlackout, removeBlackout, blackoutDates,
+  readBlackouts, addBlackout, removeBlackout, blackoutDates, blackoutMap,
 };
