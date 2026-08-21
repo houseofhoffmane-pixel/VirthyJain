@@ -11,6 +11,7 @@ const path = require('path');
 const fs = require('fs');
 const express = require('express');
 const config = require('./config');
+const settings = require('./settings');
 const A = require('./availability');
 const email = require('./email');
 const store = require('./store');
@@ -35,7 +36,7 @@ app.use(express.urlencoded({ extended: true }));
 
 const PUBLIC_URL = process.env.PUBLIC_URL || '';
 const money = (p) => '€' + p;
-const serviceById = (id) => config.services.find((s) => s.id === Number(id));
+const serviceById = (id) => settings.getServices().find((s) => s.id === Number(id));
 const formatByKey = (k) => config.formats.find((f) => f.key === k);
 const esc = (s) => String(s == null ? '' : s).replace(/[&<>"]/g, (c) =>
   ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -250,7 +251,7 @@ app.get('/health', (_req, res) => res.json({ ok: true, store: store.FILE }));
 
 app.get('/api/services', (_req, res) => {
   res.json({
-    services: config.services.map((s) => ({
+    services: settings.getServices().map((s) => ({
       id: s.id, name: s.name, durationMinutes: s.duration,
       duration: `${s.duration} minutes`, price: money(s.price),
     })),
@@ -534,6 +535,7 @@ const ADMIN_NAV = [
   ['/admin/all', 'All bookings', 'all'],
   ['/admin/blackouts', 'Block off days', 'blackouts'],
   ['/admin/file-labels', 'File labels', 'filelabels'],
+  ['/admin/settings', 'Services & hours', 'settings'],
 ];
 function adminShell(title, inner, active) {
   const nav = ADMIN_NAV.map(([href, label, key]) => `<a href="${href}"${active === key ? ' class="active"' : ''}>${label}</a>`).join('');
@@ -853,6 +855,68 @@ app.get('/admin/file-labels', (req, res) => {
 });
 app.post('/admin/file-label', (req, res) => { if (!guard(req, res)) return; store.addFileLabel((req.body && req.body.label) || ''); res.redirect('/admin/file-labels'); });
 app.post('/admin/file-label/delete', (req, res) => { if (!guard(req, res)) return; store.removeFileLabel((req.body && req.body.label) || ''); res.redirect('/admin/file-labels'); });
+
+// --- services & opening hours (admin-editable; defaults live in config.js) --
+const WEEK = [[1, 'Monday'], [2, 'Tuesday'], [3, 'Wednesday'], [4, 'Thursday'], [5, 'Friday'], [6, 'Saturday'], [0, 'Sunday']];
+app.get('/admin/settings', (req, res) => {
+  res.type('text/html');
+  if (!adminAuthed(req)) return res.redirect('/admin');
+  const saved = req.query.saved ? '<div style="background:#EDF1E9;border:1px solid #4E7A5E;border-radius:10px;padding:10px 14px;margin-bottom:14px">Saved.</div>' : '';
+  const din = 'padding:9px;border:1px solid #C9C2B2;border-radius:8px;font:inherit';
+  const svc = settings.getServices();
+  const svcRow = (s) => `<tr class="svcrow">
+      <td><input name="services[__i__][id]" type="hidden" value="${esc(s ? s.id : '')}"><input name="services[__i__][name]" value="${esc(s ? s.name : '')}" placeholder="Service name" style="width:100%;${din}"></td>
+      <td><input name="services[__i__][duration]" type="number" min="5" step="5" value="${esc(s ? s.duration : '')}" placeholder="min" style="width:80px;${din}"></td>
+      <td><input name="services[__i__][price]" type="number" min="0" step="1" value="${esc(s ? s.price : '')}" placeholder="€" style="width:80px;${din}"></td>
+      <td><button type="button" class="ghost" style="margin:0" onclick="this.closest('tr').remove()">✕</button></td>
+    </tr>`;
+  // Render existing rows with real indexes so nested form parses cleanly.
+  const svcRows = svc.map((s, i) => svcRow(s).replace(/__i__/g, i)).join('');
+  const servicesCard = `<div class="card">
+    <h3 style="margin:0 0 4px">Services</h3>
+    <p class="muted" style="margin:0 0 10px">Name, length in minutes, and price in euro. Renaming a service never changes past bookings.</p>
+    <form method="POST" action="/admin/settings/services">
+      <table style="width:100%;border-collapse:collapse"><thead><tr style="text-align:left"><th class="muted">Service</th><th class="muted">Minutes</th><th class="muted">Price €</th><th></th></tr></thead>
+      <tbody id="svcBody">${svcRows}</tbody></table>
+      <button type="button" class="ghost" style="margin:10px 0" onclick="addSvc()">+ Add service</button><br>
+      <button class="dark" style="margin:0">Save services</button>
+    </form>
+    <template id="svcTpl">${svcRow(null)}</template>
+    <script>
+      function addSvc(){var t=document.getElementById('svcTpl').innerHTML;var i=document.querySelectorAll('#svcBody .svcrow').length + Math.floor(Math.random()*1e6);var tr=document.createElement('tbody');tr.innerHTML=t.replace(/__i__/g,i);document.getElementById('svcBody').appendChild(tr.firstElementChild);}
+    </script>
+  </div>`;
+
+  const hoursCards = config.formats.map((f) => {
+    const rows = WEEK.map(([d, label]) => `<div style="display:flex;gap:10px;align-items:center;margin-bottom:6px">
+        <div style="width:90px" class="muted">${label}</div>
+        <input name="hours[${f.key}][${d}]" value="${esc(settings.windowsText(f.key, d))}" placeholder="closed" style="flex:1;${din}">
+      </div>`).join('');
+    return `<div class="card">
+      <h3 style="margin:0 0 4px">${esc(f.name)} hours</h3>
+      <p class="muted" style="margin:0 0 10px">One or more windows, e.g. <code>08:00-11:45, 14:00-17:45</code>. Leave a day blank to close it.</p>
+      ${rows}</div>`;
+  }).join('');
+  const hoursForm = `<form method="POST" action="/admin/settings/hours">${hoursCards}<button class="dark" style="margin:0">Save hours</button></form>`;
+
+  const resetCard = `<div class="card"><h3 style="margin:0 0 4px">Reset</h3>
+    <p class="muted" style="margin:0 0 10px">Discard your changes and go back to the built-in defaults.</p>
+    <form method="POST" action="/admin/settings/reset" onsubmit="return confirm('Reset services and hours to the defaults?')"><button class="ghost" style="margin:0">Reset to defaults</button></form></div>`;
+
+  res.send(adminShell('Services & hours', `${saved}${servicesCard}${hoursForm}${resetCard}`, 'settings'));
+});
+const asArray = (v) => (Array.isArray(v) ? v : v && typeof v === 'object' ? Object.values(v) : []);
+app.post('/admin/settings/services', (req, res) => {
+  if (!guard(req, res)) return;
+  settings.saveServices(asArray(req.body && req.body.services));
+  res.redirect('/admin/settings?saved=1');
+});
+app.post('/admin/settings/hours', (req, res) => {
+  if (!guard(req, res)) return;
+  settings.saveHours((req.body && req.body.hours) || {}, config.formats.map((f) => f.key));
+  res.redirect('/admin/settings?saved=1');
+});
+app.post('/admin/settings/reset', (req, res) => { if (!guard(req, res)) return; settings.resetAll(); res.redirect('/admin/settings?saved=1'); });
 
 // Permanently delete a booking and its data.
 app.post('/admin/booking/:token/delete', (req, res) => {

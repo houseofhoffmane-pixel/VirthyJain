@@ -3,6 +3,7 @@
 // ('YYYY-MM-DD HH:MM:SS' strings) — no timezone maths, no libraries.
 
 const config = require('./config');
+const settings = require('./settings');
 
 // --- small local-time helpers ----------------------------------------------
 function fmtDublin(date) {
@@ -55,7 +56,7 @@ function slotsForDate(service, formatKey, dateStr, existingSameDate, blackout) {
   const blk = blackoutWindows(blackout, dateStr);
   // Whole-day block => treat the day as non-working.
   if (blk && blk.some((w) => w[0] <= 0 && w[1] >= 1440)) return { date: dateStr, working: false, slots: [] };
-  const windows = (config.hours[formatKey] || {})[weekdayOf(dateStr)] || [];
+  const windows = (settings.getHours()[formatKey] || {})[weekdayOf(dateStr)] || [];
   const working = windows.length > 0;
   const threshold = localOfInstant(Date.now() + config.minNoticeHours * 3600e3); // "YYYY-MM-DD HH:MM"
   const slots = [];
