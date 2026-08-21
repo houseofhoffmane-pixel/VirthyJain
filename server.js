@@ -174,6 +174,8 @@ app.get('/api/my-bookings', (req, res) => {
   if (!user) return res.status(401).json({ error: 'login_required' });
   const mine = store.readAll()
     .filter((b) => b.email === user.email)
+    // Patients only see live/real appointments — not rejected, declined or cancelled ones.
+    .filter((b) => !['rejected', 'declined', 'cancelled'].includes(b.status))
     .sort((a, b) => b.starts_at.localeCompare(a.starts_at))
     .map((b) => {
       const c = secure.decrypt(b.clinicalEnc) || {};
@@ -727,7 +729,7 @@ function sessionFileRow(b) {
       <span><span class="pill" style="background:${col}">${esc(b.status)}</span>${pay}</span>
     </div>
     ${b.notes ? `<div class="muted" style="margin-top:6px">Reason given: ${esc(b.notes)}</div>` : ''}
-    ${clinicalForm(b)}
+    ${['confirmed', 'completed'].includes(b.status) ? clinicalForm(b) : ''}
     <div style="margin-top:8px">${deleteBtn(b.token, b.email)}</div>
   </div>`;
 }
