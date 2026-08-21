@@ -589,7 +589,12 @@ app.post('/admin/booking/:token/clinical', (req, res) => {
   const bd = req.body || {};
   const soap = { s: bd.s || '', o: bd.o || '', a: bd.a || '', p: bd.p || '' };
   const recommendation = String(bd.recommendation || '');
-  const b = store.patch(req.params.token, { clinicalEnc: secure.encrypt({ soap, recommendation }) });
+  const outcomes = {};
+  for (const m of config.outcomes) {
+    const v = bd['out_' + m.id];
+    if (v != null && String(v).trim() !== '' && Number.isFinite(Number(v))) outcomes[m.id] = Number(v);
+  }
+  const b = store.patch(req.params.token, { clinicalEnc: secure.encrypt({ soap, recommendation, outcomes }) });
   if (b && bd.notify && recommendation.trim()) email.patientRecommendation(b, recommendation).catch(() => {});
   res.redirect(b ? '/admin/patient/' + encodeURIComponent(b.email) : '/admin');
 });
@@ -705,11 +710,51 @@ function clinicalForm(b) {
   return `<form method="POST" action="/admin/booking/${esc(b.token)}/clinical" style="margin-top:10px">
     <div style="font-weight:600;font-size:13px">Clinical notes — private (SOAP)</div>
     ${ta('s', 'Subjective', soap.s)}${ta('o', 'Objective', soap.o)}${ta('a', 'Assessment', soap.a)}${ta('p', 'Plan', soap.p)}
+    <div style="font-weight:600;font-size:13px;margin-top:12px">Outcome measures</div>
+    <div>${config.outcomes.map((m) => {
+      const v = (clinical.outcomes && clinical.outcomes[m.id] != null) ? clinical.outcomes[m.id] : '';
+      return `<span style="display:inline-block;margin:6px 12px 0 0"><div class="muted">${esc(m.label)}</div><input type="number" name="out_${esc(m.id)}" value="${esc(v)}"${m.min != null ? ` min="${m.min}"` : ''}${m.max != null ? ` max="${m.max}"` : ''} step="any" style="width:96px;padding:8px;border:1px solid #C9C2B2;border-radius:8px;font:inherit"></span>`;
+    }).join('')}</div>
     <div style="font-weight:600;font-size:13px;margin-top:12px">Recommendation for the patient <span class="muted" style="font-weight:400">(they can see this)</span></div>
     <textarea name="recommendation" rows="2" style="width:100%;padding:8px;border:1px solid #C9C2B2;border-radius:8px;font:inherit;box-sizing:border-box;margin-top:6px">${esc(clinical.recommendation || '')}</textarea>
     <label style="display:block;font-size:12px;color:#6C7A70;margin-top:8px"><input type="checkbox" name="notify" style="width:auto;margin-right:6px">Email this recommendation to the patient</label>
     <button class="dark" style="margin-top:8px">Save</button>
   </form>`;
+}
+
+// Hand-rolled inline SVG line chart for one outcome measure over sessions.
+function outcomeChart(label, series, min, max) {
+  if (!series.length) return '';
+  const W = 320, H = 96, padL = 8, padR = 8, padT = 16, padB = 20;
+  const n = series.length;
+  const xAt = (i) => padL + (n === 1 ? (W - padL - padR) / 2 : i * (W - padL - padR) / (n - 1));
+  const lo = min != null ? min : Math.min(...series.map((s) => s.v));
+  const hi = max != null ? max : Math.max(...series.map((s) => s.v));
+  const span = (hi - lo) || 1;
+  const yAt = (v) => padT + (H - padT - padB) * (1 - (v - lo) / span);
+  const pts = series.map((s, i) => [xAt(i), yAt(s.v)]);
+  const path = pts.map((p, i) => (i ? 'L' : 'M') + p[0].toFixed(1) + ' ' + p[1].toFixed(1)).join(' ');
+  const dots = pts.map((p, i) => `<circle cx="${p[0].toFixed(1)}" cy="${p[1].toFixed(1)}" r="3" fill="#4E7A5E"/><text x="${p[0].toFixed(1)}" y="${(p[1] - 6).toFixed(1)}" font-size="9" fill="#3D4A42" text-anchor="middle">${esc(series[i].v)}</text>`).join('');
+  return `<div style="margin-bottom:14px"><div style="font-size:13px;font-weight:600;margin-bottom:4px">${esc(label)}</div>
+    <svg viewBox="0 0 ${W} ${H}" style="width:100%;max-width:440px;height:auto;background:#FFFDF8;border:1px solid #E4DED1;border-radius:8px">
+      <line x1="${padL}" y1="${H - padB}" x2="${W - padR}" y2="${H - padB}" stroke="#E4DED1"/>
+      <path d="${path}" fill="none" stroke="#4E7A5E" stroke-width="2"/>${dots}
+      <text x="${padL}" y="${H - 5}" font-size="9" fill="#8A9188">${esc(series[0].date)}</text>
+      <text x="${W - padR}" y="${H - 5}" font-size="9" fill="#8A9188" text-anchor="end">${esc(series[n - 1].date)}</text>
+    </svg></div>`;
+}
+function progressCard(bookings) {
+  const asc = bookings.slice().sort((a, b) => a.starts_at.localeCompare(b.starts_at))
+    .map((b) => ({ date: b.starts_at.slice(0, 10), c: secure.decrypt(b.clinicalEnc) || {} }));
+  let charts = '';
+  for (const m of config.outcomes) {
+    const series = asc
+      .filter((x) => x.c.outcomes && x.c.outcomes[m.id] != null && x.c.outcomes[m.id] !== '')
+      .map((x) => ({ date: x.date, v: Number(x.c.outcomes[m.id]) }))
+      .filter((x) => Number.isFinite(x.v));
+    if (series.length) charts += outcomeChart(m.label, series, m.min, m.max);
+  }
+  return charts ? `<div class="card"><div class="muted" style="margin-bottom:8px">Progress</div>${charts}</div>` : '';
 }
 
 // Patients directory — searchable by name.
@@ -781,6 +826,7 @@ app.get('/admin/patient/:email', (req, res) => {
 
   const inner = `${backLink('/admin/patients', 'Patients')}
       ${summary}
+      ${progressCard(bookings)}
       <div class="card"><div class="muted" style="margin-bottom:8px">Health &amp; consent form</div>${intakeHtml}</div>
       <h2>Session history</h2>
       ${bookings.length ? bookings.map(sessionFileRow).join('') : '<p class="muted">No sessions yet.</p>'}`;

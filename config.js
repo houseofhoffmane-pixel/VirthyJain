@@ -51,6 +51,14 @@ module.exports = {
     address: process.env.PRACTICE_ADDRESS || 'Dublin, Ireland',
   },
 
+  // Outcome measures recorded per session (numbers). Edit freely; each becomes
+  // an input on the session note and a line on the patient's progress chart.
+  outcomes: [
+    { id: 'pain', label: 'Pain (0–10)', min: 0, max: 10 },
+    { id: 'rom', label: 'Range of motion (°)', min: 0, max: 180 },
+    { id: 'function', label: 'Function (0–100)', min: 0, max: 100 },
+  ],
+
   // Digital intake + consent form. Add/edit fields here anytime (no code
   // changes). types: text | textarea | date | tel | select | yesno.
   intake: {
