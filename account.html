@@ -59,7 +59,7 @@
 <body>
 <div class="app">
   <aside class="side">
-    <div class="brand"><a href="/" style="color:inherit">Virthy&nbsp;Jain<span>.</span></a></div>
+    <div class="brand" id="sideName">Account</div>
     <div class="sub">Your account</div>
     <nav>
       <a data-sec="profile" class="active" onclick="showSection('profile')">Profile</a>
@@ -105,6 +105,11 @@
           <h2>Health &amp; consent form</h2>
           <p class="lead" id="intakeStatus"></p>
           <div id="intakeForm"></div>
+          <div style="margin-top:22px;border-top:1px solid #E4DED1;padding-top:18px">
+            <div class="kick">Report or scan (optional)</div>
+            <p class="lead" style="margin:6px 0 10px">You can add one file — e.g. a scan or referral letter — for Virthy to see.</p>
+            <div id="reportArea"></div>
+          </div>
         </div>
       </section>
 
@@ -151,11 +156,31 @@ function genderOptions(sel){
   }).join('');
 }
 function render(){
+  el('sideName').textContent = me.name || 'My account';
   el('pf_gender').innerHTML = genderOptions(me.gender);
   el('pf_name').value = me.name||''; el('pf_email').value = me.email||'';
   el('pf_phone').value = me.phone||''; el('pf_age').value = me.age||'';
   el('hello').textContent = 'Signed in as '+me.email;
 }
+function loadReport(){
+  api('/api/intake/report').then(function(r){
+    var a=el('reportArea'); if(!a) return;
+    var f=r.body&&r.body.file;
+    var uploader='<div style="margin-top:8px;display:flex;gap:8px;align-items:center;flex-wrap:wrap"><input type="file" id="rp_file"><button class="primary" style="padding:9px 18px" onclick="uploadReport()">'+(f?'Replace file':'Upload report')+'</button><span id="rp_msg" class="msg"></span></div>';
+    if(f){ a.innerHTML='<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;background:#F7F4EE;border:1px solid #E4DED1;border-radius:10px;padding:10px 12px"><span>📄 <a href="/files/'+esc(f.id)+'">'+esc(f.name)+'</a></span><button onclick="removeReport()" style="background:none;border:none;color:#B4562F;cursor:pointer;font:inherit;text-decoration:underline">Remove</button></div>'+uploader; }
+    else { a.innerHTML=uploader; }
+  }).catch(function(){});
+}
+function uploadReport(){
+  var inp=el('rp_file'), m=el('rp_msg');
+  if(!inp||!inp.files||!inp.files.length){ if(m){m.style.color='#B4562F';m.textContent='Choose a file first.';} return; }
+  var fd=new FormData(); fd.append('file', inp.files[0]);
+  if(m){m.style.color='#6C7A70';m.textContent='Uploading…';}
+  fetch('/api/intake/report',{method:'POST',body:fd}).then(function(r){return r.json().then(function(j){return {ok:r.ok,body:j};}).catch(function(){return {ok:r.ok,body:{}};});}).then(function(r){
+    if(r.ok){ loadReport(); } else if(m){ m.style.color='#B4562F'; m.textContent=(r.body&&r.body.message)||'Upload failed.'; }
+  }).catch(function(){ if(m){m.style.color='#B4562F';m.textContent='Network error.';} });
+}
+function removeReport(){ post('/api/intake/report/delete',{}).then(function(){ loadReport(); }); }
 function loadHistory(){
   api('/api/my-bookings').then(function(r){
     var h = el('hist');
@@ -235,7 +260,7 @@ api('/api/me').then(function(r){
   me = r.body && r.body.user;
   if(!me){ el('gate').style.display='block'; return; }
   el('panel').style.display='block';
-  render(); loadHistory(); loadIntake();
+  render(); loadHistory(); loadIntake(); loadReport();
   var start = ['profile','health','bookings','password'].indexOf(location.hash.slice(1))>=0 ? location.hash.slice(1) : 'profile';
   showSection(start);
 }).catch(function(){ el('gate').style.display='block'; });

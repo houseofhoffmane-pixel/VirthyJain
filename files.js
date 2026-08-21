@@ -40,4 +40,14 @@ function remove(id) {
   writeMeta(readMeta().filter((f) => f.id !== id));
 }
 
-module.exports = { DIR, add, byId, byBooking, readBuffer, remove };
+// A patient's single self-uploaded report (bookingToken === 'patient-report').
+function patientReport(email) {
+  const e = (email || '').toLowerCase();
+  return readMeta().find((f) => f.bookingToken === 'patient-report' && f.patientEmail === e) || null;
+}
+function removePatientReports(email) {
+  const e = (email || '').toLowerCase();
+  readMeta().filter((f) => f.bookingToken === 'patient-report' && f.patientEmail === e).forEach((f) => remove(f.id));
+}
+
+module.exports = { DIR, add, byId, byBooking, readBuffer, remove, patientReport, removePatientReports };

@@ -168,6 +168,31 @@ app.post('/api/intake', (req, res) => {
   res.json({ ok: true });
 });
 
+// Patient's single self-uploaded report (from their account health form).
+app.get('/api/intake/report', (req, res) => {
+  const user = currentUser(req);
+  if (!user) return res.status(401).json({ error: 'login_required' });
+  const f = filesStore.patientReport(user.email);
+  res.json({ file: f ? { id: f.id, name: f.originalName } : null });
+});
+app.post('/api/intake/report', (req, res) => {
+  const user = currentUser(req);
+  if (!user) return res.status(401).json({ error: 'login_required' });
+  upload.single('file')(req, res, (err) => {
+    if (err) return res.status(400).json({ error: 'upload_failed', message: err.message });
+    if (!req.file) return res.status(400).json({ error: 'no_file', message: 'Please choose a file.' });
+    filesStore.removePatientReports(user.email); // only one report per patient
+    filesStore.add({ bookingToken: 'patient-report', patientEmail: user.email, label: 'Patient report', originalName: req.file.originalname, mime: req.file.mimetype, buffer: req.file.buffer });
+    res.json({ ok: true });
+  });
+});
+app.post('/api/intake/report/delete', (req, res) => {
+  const user = currentUser(req);
+  if (!user) return res.status(401).json({ error: 'login_required' });
+  filesStore.removePatientReports(user.email);
+  res.json({ ok: true });
+});
+
 app.post('/api/change-password', (req, res) => {
   const user = currentUser(req);
   if (!user) return res.status(401).json({ error: 'login_required' });
@@ -991,10 +1016,14 @@ app.get('/admin/patient/:email', (req, res) => {
     intakeHtml += `<div style="margin-top:12px"><div class="muted">Consent (version ${esc(rec.version || '')})</div>${consentBits}</div>`;
   }
 
+  const report = filesStore.patientReport(email);
+  const reportHtml = report
+    ? `<div style="margin-top:12px;padding-top:12px;border-top:1px solid #E4DED1"><div class="muted">Report uploaded by patient</div>📄 <a href="/files/${esc(report.id)}">${esc(report.originalName)}</a></div>`
+    : '';
   const inner = `${backLink('/admin/patients', 'Patients')}
       ${summary}
       ${progressCard(bookings)}
-      <div class="card"><div class="muted" style="margin-bottom:8px">Health &amp; consent form</div>${intakeHtml}</div>
+      <div class="card"><div class="muted" style="margin-bottom:8px">Health &amp; consent form</div>${intakeHtml}${reportHtml}</div>
       <h2>Session history</h2>
       ${bookings.length ? bookings.map(sessionFileRow).join('') : '<p class="muted">No sessions yet.</p>'}`;
   res.send(adminShell('Patient file', inner, 'patients'));
