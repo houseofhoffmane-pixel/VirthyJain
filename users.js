@@ -23,6 +23,12 @@ function findByEmail(email) {
   const e = norm(email);
   return readAll().find((u) => u.email === e) || null;
 }
+const normPhone = (p) => String(p || '').replace(/[^\d]/g, '');
+function findByPhone(phone) {
+  const n = normPhone(phone);
+  if (!n) return null;
+  return readAll().find((u) => normPhone(u.phone) === n) || null;
+}
 function list() { return readAll().map(publicUser); }
 
 // Public view of a user (never expose the password hash).
@@ -98,4 +104,4 @@ function tokenValid(token) {
   return !!readAll().find((u) => u.resetToken === token && u.resetExpires > Date.now());
 }
 
-module.exports = { FILE, findByEmail, list, publicUser, create, verify, update, changePassword, setReset, resetPassword, tokenValid };
+module.exports = { FILE, findByEmail, findByPhone, list, publicUser, create, verify, update, changePassword, setReset, resetPassword, tokenValid };

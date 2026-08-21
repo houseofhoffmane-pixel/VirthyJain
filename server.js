@@ -88,10 +88,12 @@ function currentUser(req) { const em = sessionEmail(req); return em ? users.find
 app.post('/api/register', (req, res) => {
   const b = req.body || {};
   const em = String(b.email || '').trim().toLowerCase();
-  if (!b.name || !em || !b.password) return res.status(400).json({ error: 'missing_fields', message: 'Name, email and password are required.' });
+  if (!String(b.name || '').trim() || !em || !String(b.phone || '').trim() || !String(b.gender || '').trim() || !String(b.age || '').trim() || !b.password)
+    return res.status(400).json({ error: 'missing_fields', message: 'Please fill in all fields.' });
   if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(em)) return res.status(400).json({ error: 'bad_email', message: 'Please enter a valid email.' });
   if (String(b.password).length < 6) return res.status(400).json({ error: 'weak_password', message: 'Password must be at least 6 characters.' });
-  if (users.findByEmail(em)) return res.status(409).json({ error: 'email_taken', message: 'An account with that email already exists — try signing in.' });
+  if (users.findByEmail(em)) return res.status(409).json({ error: 'email_taken', message: 'An account with this email already exists. Please sign in — or use “Forgot password” if you don’t remember it.' });
+  if (users.findByPhone(b.phone)) return res.status(409).json({ error: 'phone_taken', message: 'An account with this phone number already exists. Please sign in — or use “Forgot password” if you don’t remember it.' });
   const u = users.create({ name: b.name, email: em, phone: b.phone, gender: b.gender, age: b.age, password: b.password });
   setSession(res, em);
   res.status(201).json({ ok: true, user: users.publicUser(u) });

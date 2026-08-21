@@ -597,12 +597,13 @@ function renderAuth(){
   if(m==='register'){
     el('authTitle').textContent = 'Create account';
     body.innerHTML = '<div style="display:grid;gap:10px">'
-      + '<input id="rg_name" type="text" placeholder="Full name" style="'+f+'">'
-      + '<input id="rg_email" type="email" placeholder="Email" style="'+f+'">'
-      + '<input id="rg_phone" type="tel" placeholder="Phone" style="'+f+'">'
-      + '<div style="display:flex;gap:10px"><select id="rg_gender" style="'+f+'"><option value="">Gender</option><option>Female</option><option>Male</option><option>Non-binary</option><option>Prefer not to say</option></select>'
-      + '<input id="rg_age" type="number" min="0" max="120" placeholder="Age" style="'+f+'"></div>'
-      + '<input id="rg_pass" type="password" placeholder="Password (min 6 characters)" style="'+f+'">'
+      + '<div style="font-size:12px;color:#6C7A70;margin-bottom:-2px">All fields are required.</div>'
+      + '<input id="rg_name" type="text" required placeholder="Full name *" style="'+f+'">'
+      + '<input id="rg_email" type="email" required placeholder="Email *" style="'+f+'">'
+      + '<input id="rg_phone" type="tel" required placeholder="Phone *" style="'+f+'">'
+      + '<div style="display:flex;gap:10px"><select id="rg_gender" required style="'+f+'"><option value="">Gender *</option><option>Female</option><option>Male</option><option>Non-binary</option><option>Prefer not to say</option></select>'
+      + '<input id="rg_age" type="number" required min="0" max="120" placeholder="Age *" style="'+f+'"></div>'
+      + '<input id="rg_pass" type="password" required placeholder="Password (min 6 characters) *" style="'+f+'">'
       + '<button type="button" onclick="doRegister()" class="btn-primary" style="width:100%">Create account</button></div>';
     sw.innerHTML = 'Already have an account? <button type="button" onclick="openAuth(\'signin\')" style="background:none;border:none;color:#B4562F;cursor:pointer;font:inherit;text-decoration:underline">Sign in</button>';
   } else if(m==='forgot'){
@@ -628,7 +629,9 @@ function doLogin(){
   }).catch(function(){ authErr('Network error. Please try again.'); });
 }
 function doRegister(){
-  postJSON('/api/register', { name:el('rg_name').value, email:el('rg_email').value, phone:el('rg_phone').value, gender:el('rg_gender').value, age:el('rg_age').value, password:el('rg_pass').value }).then(function(r){
+  var p = { name:el('rg_name').value.trim(), email:el('rg_email').value.trim(), phone:el('rg_phone').value.trim(), gender:el('rg_gender').value, age:el('rg_age').value, password:el('rg_pass').value };
+  if(!p.name||!p.email||!p.phone||!p.gender||!p.age||!p.password){ authErr('Please fill in all fields.'); return; }
+  postJSON('/api/register', p).then(function(r){
     if(r.ok){ state.user=r.body.user; closeAuth(); renderAccount(); } else { authErr((r.body&&r.body.message)||'Could not create account.'); }
   }).catch(function(){ authErr('Network error. Please try again.'); });
 }
