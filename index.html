@@ -575,7 +575,7 @@ function submitBooking(e){
 function renderAccount(){
   var nav = el('navAuth');
   if(state.user){
-    if(nav) nav.innerHTML = '<a href="/account" style="color:#4A574F">My account</a>';
+    if(nav) nav.innerHTML = '<a href="/account" style="color:#4A574F">My account</a> <a href="#" onclick="doLogout();return false;" style="color:#4A574F;margin-left:14px">Sign out</a>';
     el('f_name').value = state.user.name; el('f_name').readOnly = true;
     el('f_email').value = state.user.email; el('f_email').readOnly = true;
     if(state.user.phone) el('f_phone').value = state.user.phone;
