@@ -23,7 +23,16 @@ function findByEmail(email) {
   const e = norm(email);
   return readAll().find((u) => u.email === e) || null;
 }
-const normPhone = (p) => String(p || '').replace(/[^\d]/g, '');
+// Normalise an Irish phone number to its national significant number so that
+// "+353 87 706 5821", "0035387 7065821" and "087 706 5821" all match.
+function normPhone(p) {
+  let d = String(p || '').replace(/\D/g, ''); // digits only
+  if (!d) return '';
+  if (d.startsWith('00')) d = d.slice(2);      // international prefix 00…
+  if (d.startsWith('353')) d = d.slice(3);     // Ireland country code
+  else if (d.startsWith('0')) d = d.slice(1);  // national trunk 0
+  return d;
+}
 function findByPhone(phone) {
   const n = normPhone(phone);
   if (!n) return null;
