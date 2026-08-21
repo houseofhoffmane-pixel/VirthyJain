@@ -9,6 +9,7 @@ const path = require('path');
 
 const FILE = process.env.DATA_FILE || path.join(os.homedir(), 'virthy-bookings.json');
 const BLACKOUTS_FILE = process.env.BLACKOUTS_FILE || path.join(os.homedir(), 'virthy-blackouts.json');
+const FILE_LABELS_FILE = process.env.FILE_LABELS_FILE || path.join(os.homedir(), 'virthy-file-labels.json');
 
 function readAll() {
   try {
@@ -118,7 +119,22 @@ function patch(token, fields) {
   return b;
 }
 
+// --- editable list of file labels (e.g. Shoulder, Back, Legs) --------------
+function readFileLabels() {
+  try { const l = JSON.parse(fs.readFileSync(FILE_LABELS_FILE, 'utf8')); if (Array.isArray(l) && l.length) return l; } catch (e) { /* default below */ }
+  return ['Shoulder', 'Back', 'Legs'];
+}
+function writeFileLabels(list) { try { fs.writeFileSync(FILE_LABELS_FILE, JSON.stringify(list, null, 2)); return true; } catch (e) { console.error('[store] file labels write', e.message); return false; } }
+function addFileLabel(label) {
+  const l = String(label || '').trim();
+  if (!l) return;
+  const list = readFileLabels();
+  if (!list.some((x) => x.toLowerCase() === l.toLowerCase())) { list.push(l); writeFileLabels(list); }
+}
+function removeFileLabel(label) { writeFileLabels(readFileLabels().filter((x) => x !== label)); }
+
 module.exports = {
   FILE, readAll, writeAll, activeBookings, findByToken, add, updateStatus, patch, remove,
   readBlackouts, addBlackout, removeBlackout, blackoutDates, blackoutMap,
+  readFileLabels, addFileLabel, removeFileLabel,
 };

@@ -33,4 +33,18 @@ function decrypt(payload) {
   } catch (e) { return null; }
 }
 
-module.exports = { encrypt, decrypt };
+// Binary variants for files. Layout: [12-byte iv][16-byte tag][ciphertext].
+function encryptBuffer(buf) {
+  const iv = crypto.randomBytes(12);
+  const c = crypto.createCipheriv('aes-256-gcm', key(), iv);
+  const data = Buffer.concat([c.update(buf), c.final()]);
+  return Buffer.concat([iv, c.getAuthTag(), data]);
+}
+function decryptBuffer(enc) {
+  const iv = enc.subarray(0, 12), tag = enc.subarray(12, 28), data = enc.subarray(28);
+  const d = crypto.createDecipheriv('aes-256-gcm', key(), iv);
+  d.setAuthTag(tag);
+  return Buffer.concat([d.update(data), d.final()]);
+}
+
+module.exports = { encrypt, decrypt, encryptBuffer, decryptBuffer };

@@ -18,6 +18,16 @@ const users = require('./users');
 const intakes = require('./intakes');
 const receipt = require('./receipt');
 const secure = require('./secure');
+const filesStore = require('./files');
+const multer = require('multer');
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 10 * 1024 * 1024 }, // 10 MB
+  fileFilter: (req, file, cb) => {
+    const ok = /(pdf|png|jpe?g|webp|gif|msword|officedocument|plain)/i.test(file.mimetype);
+    cb(ok ? null : new Error('Only PDF, image, Word or text files are allowed'), ok);
+  },
+});
 
 const app = express();
 app.use(express.json());
@@ -179,7 +189,8 @@ app.get('/api/my-bookings', (req, res) => {
     .sort((a, b) => b.starts_at.localeCompare(a.starts_at))
     .map((b) => {
       const c = secure.decrypt(b.clinicalEnc) || {};
-      return { serviceName: b.serviceName, formatName: b.formatName || b.format, starts_at: b.starts_at, status: b.status, recommendation: c.recommendation || '', token: b.status === 'proposed' ? b.token : undefined };
+      const files = filesStore.byBooking(b.token).map((f) => ({ id: f.id, label: f.label, name: f.originalName }));
+      return { serviceName: b.serviceName, formatName: b.formatName || b.format, starts_at: b.starts_at, status: b.status, recommendation: c.recommendation || '', files: files, token: b.status === 'proposed' ? b.token : undefined };
     });
   res.json({ bookings: mine });
 });
@@ -496,6 +507,7 @@ const ADMIN_NAV = [
   ['/admin/calendar', 'Calendar', 'calendar'],
   ['/admin/all', 'All bookings', 'all'],
   ['/admin/blackouts', 'Block off days', 'blackouts'],
+  ['/admin/file-labels', 'File labels', 'filelabels'],
 ];
 function adminShell(title, inner, active) {
   const nav = ADMIN_NAV.map(([href, label, key]) => `<a href="${href}"${active === key ? ' class="active"' : ''}>${label}</a>`).join('');
@@ -763,6 +775,59 @@ app.post('/admin/blackout', (req, res) => {
 });
 app.post('/admin/blackout/:id/delete', (req, res) => { if (!guard(req, res)) return; store.removeBlackout(req.params.id); res.redirect('/admin/blackouts'); });
 
+// --- session file attachments ----------------------------------------------
+app.post('/admin/booking/:token/file', (req, res) => {
+  if (!guard(req, res)) return;
+  upload.single('file')(req, res, (err) => {
+    res.type('text/html');
+    const b = store.findByToken(req.params.token);
+    if (err) return res.send(adminShell('Upload error', backLink(b ? '/admin/patient/' + encodeURIComponent(b.email) : '/admin', 'Back') + `<div class="card"><p style="color:#B4562F">Upload failed: ${esc(err.message)}</p></div>`, 'patients'));
+    if (!req.file || !b) return res.redirect('/admin');
+    filesStore.add({ bookingToken: b.token, patientEmail: b.email, label: String(req.body.label || 'File'), originalName: req.file.originalname, mime: req.file.mimetype, buffer: req.file.buffer });
+    res.redirect('/admin/patient/' + encodeURIComponent(b.email));
+  });
+});
+app.post('/admin/file/:id/delete', (req, res) => {
+  if (!guard(req, res)) return;
+  const f = filesStore.byId(req.params.id);
+  filesStore.remove(req.params.id);
+  res.redirect(f ? '/admin/patient/' + encodeURIComponent(f.patientEmail) : '/admin');
+});
+// Download — the owning patient or the admin only. Streams decrypted.
+app.get('/files/:id', (req, res) => {
+  const f = filesStore.byId(req.params.id);
+  if (!f) return res.status(404).send('Not found');
+  const user = currentUser(req);
+  const isOwner = user && (f.patientEmail || '').toLowerCase() === user.email.toLowerCase();
+  if (!isOwner && !adminAuthed(req)) return res.status(403).send('Not allowed');
+  const buf = filesStore.readBuffer(req.params.id);
+  if (!buf) return res.status(500).send('Could not read file');
+  res.setHeader('Content-Type', f.mime || 'application/octet-stream');
+  res.setHeader('Content-Disposition', `attachment; filename="${(f.originalName || 'file').replace(/[^\w.\- ]/g, '_')}"`);
+  res.send(buf);
+});
+
+// --- file label management (editable dropdown values) ----------------------
+app.get('/admin/file-labels', (req, res) => {
+  res.type('text/html');
+  if (!adminAuthed(req)) return res.redirect('/admin');
+  const labels = store.readFileLabels();
+  const list = labels.length
+    ? labels.map((l) => `<div style="display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #E4DED1;padding:8px 0"><span>${esc(l)}</span><form method="POST" action="/admin/file-label/delete"><input type="hidden" name="label" value="${esc(l)}"><button class="ghost" style="margin:0">Remove</button></form></div>`).join('')
+    : '<p class="muted">No labels.</p>';
+  const inner = `<div class="card">
+      <p class="muted">These are the options in the file-upload dropdown on a patient's session.</p>
+      <form method="POST" action="/admin/file-label" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+        <input type="text" name="label" placeholder="e.g. Neck, Knee…" required style="padding:9px;border:1px solid #C9C2B2;border-radius:8px;font:inherit">
+        <button class="dark" style="margin:0">Add label</button>
+      </form>
+      <div style="margin-top:12px">${list}</div>
+    </div>`;
+  res.send(adminShell('File labels', inner, 'filelabels'));
+});
+app.post('/admin/file-label', (req, res) => { if (!guard(req, res)) return; store.addFileLabel((req.body && req.body.label) || ''); res.redirect('/admin/file-labels'); });
+app.post('/admin/file-label/delete', (req, res) => { if (!guard(req, res)) return; store.removeFileLabel((req.body && req.body.label) || ''); res.redirect('/admin/file-labels'); });
+
 // Permanently delete a booking and its data.
 app.post('/admin/booking/:token/delete', (req, res) => {
   if (!guard(req, res)) return;
@@ -784,8 +849,25 @@ function sessionFileRow(b) {
       <span><span class="pill" style="background:${col}">${esc(b.status)}</span>${pay}</span>
     </div>
     ${b.notes ? `<div class="muted" style="margin-top:6px">Reason given: ${esc(b.notes)}</div>` : ''}
-    ${['confirmed', 'completed'].includes(b.status) ? clinicalForm(b) : ''}
+    ${['confirmed', 'completed'].includes(b.status) ? clinicalForm(b) + filesSection(b) : ''}
     <div style="margin-top:8px">${deleteBtn(b.token, b.email)}</div>
+  </div>`;
+}
+function filesSection(b) {
+  const files = filesStore.byBooking(b.token);
+  const labels = store.readFileLabels();
+  const list = files.length
+    ? files.map((f) => `<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:6px 0;border-bottom:1px solid #EFEAE0"><span>📄 <b>${esc(f.label)}</b> · <a href="/files/${esc(f.id)}">${esc(f.originalName)}</a></span><form method="POST" action="/admin/file/${esc(f.id)}/delete" onsubmit="return confirm('Delete this file?')"><button class="ghost" style="margin:0">Remove</button></form></div>`).join('')
+    : '<div class="muted">No files yet.</div>';
+  return `<div style="margin-top:12px">
+    <div style="font-weight:600;font-size:13px">Files for the patient</div>
+    ${list}
+    <form method="POST" action="/admin/booking/${esc(b.token)}/file" enctype="multipart/form-data" style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+      <select name="label" required style="padding:8px;border:1px solid #C9C2B2;border-radius:8px;font:inherit">${labels.map((l) => `<option>${esc(l)}</option>`).join('')}</select>
+      <input type="file" name="file" required style="font-size:13px">
+      <button class="dark" style="margin:0">Upload</button>
+    </form>
+    <a href="/admin/file-labels" style="font-size:12px">Manage labels →</a>
   </div>`;
 }
 function clinicalForm(b) {
@@ -996,7 +1078,7 @@ app.get('/account', (_req, res) => {
 app.get('/:file', (req, res, next) => {
   const name = req.params.file;
   if (!/^[\w.-]+\.(js|css|png|jpg|jpeg|svg|ico|webp|woff2?)$/.test(name)) return next();
-  if (['server.js', 'config.js', 'availability.js', 'email.js', 'store.js', 'users.js', 'intakes.js', 'receipt.js', 'secure.js'].includes(name)) return next();
+  if (['server.js', 'config.js', 'availability.js', 'email.js', 'store.js', 'users.js', 'intakes.js', 'receipt.js', 'secure.js', 'files.js'].includes(name)) return next();
   const p = path.join(__dirname, name);
   if (fs.existsSync(p)) return res.sendFile(p);
   next();

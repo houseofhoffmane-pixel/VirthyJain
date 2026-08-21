@@ -165,11 +165,12 @@ function loadHistory(){
       var col=b.status==='confirmed'?'#4E7A5E':(b.status==='pending'||b.status==='proposed')?'#B4562F':b.status==='completed'?'#3E5170':'#8A9188';
       var label=b.status==='pending'?'Awaiting confirmation':b.status==='confirmed'?'Confirmed':b.status==='proposed'?'New time proposed':b.status==='completed'?'Completed':b.status==='cancelled'?'Cancelled':b.status==='rejected'?'Not available':b.status==='declined'?'Please contact us':b.status;
       var rec = b.recommendation ? '<div style="margin-top:8px;background:#EDF1E9;border:1px solid #C4D0BE;border-radius:10px;padding:10px 12px;font-size:13px;white-space:pre-wrap;flex-basis:100%"><b>Recommendation from Virthy:</b> '+esc(b.recommendation)+'</div>' : '';
+      var filesHtml = (b.files && b.files.length) ? '<div style="margin-top:8px;flex-basis:100%;font-size:13px">'+b.files.map(function(f){ return '📄 '+esc(f.label)+' — <a href="/files/'+esc(f.id)+'">Download</a>'; }).join('<br>')+'</div>' : '';
       var actions = (b.status==='proposed' && b.token) ? '<div style="flex-basis:100%;margin-top:10px">'
         + '<button onclick="acceptProposed(\''+esc(b.token)+'\')" style="background:#4E7A5E;color:#fff;border:none;border-radius:999px;padding:9px 18px;cursor:pointer;font:inherit;margin-right:8px">Accept new time</button>'
         + '<button onclick="rejectProposed(\''+esc(b.token)+'\')" style="background:#B4562F;color:#fff;border:none;border-radius:999px;padding:9px 18px;cursor:pointer;font:inherit">Doesn\'t suit</button></div>' : '';
       return '<div class="hrow" style="flex-wrap:wrap"><div><b>'+esc(b.starts_at.slice(0,16))+'</b><br><span style="color:#6C7A70;font-size:13px">'+esc(b.serviceName)+' · '+esc(b.formatName)+'</span></div>'
-        + '<span class="pill" style="align-self:center;background:'+col+'">'+esc(label)+'</span>'+rec+actions+'</div>';
+        + '<span class="pill" style="align-self:center;background:'+col+'">'+esc(label)+'</span>'+rec+filesHtml+actions+'</div>';
     }).join('');
   }).catch(function(){ el('hist').innerHTML='<p style="color:#B4562F">Could not load your bookings.</p>'; });
 }
