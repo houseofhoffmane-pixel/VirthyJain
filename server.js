@@ -183,6 +183,7 @@ app.post('/api/intake/report', (req, res) => {
     if (!req.file) return res.status(400).json({ error: 'no_file', message: 'Please choose a file.' });
     filesStore.removePatientReports(user.email); // only one report per patient
     filesStore.add({ bookingToken: 'patient-report', patientEmail: user.email, label: 'Patient report', originalName: req.file.originalname, mime: req.file.mimetype, buffer: req.file.buffer });
+    email.practitionerReport(user, req.file.originalname).catch(() => {});
     res.json({ ok: true });
   });
 });

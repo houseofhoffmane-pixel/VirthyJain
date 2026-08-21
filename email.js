@@ -281,6 +281,21 @@ async function passwordReset(user, resetUrl) {
   );
 }
 
+// --- to Virthy: a patient uploaded a report ---------------------------------
+async function practitionerReport(patient, fileName) {
+  const who = patient.name || patient.email;
+  const body =
+    `<p style="margin:0 0 14px"><b>${esc(who)}</b> has uploaded a report to their account.</p>` +
+    `<div style="background:#F7F4EE;border:1px solid #E4DED1;border-radius:10px;padding:12px 14px;font-size:14px">📄 ${esc(fileName)}<br><span style="color:#6C7A70">${esc(patient.email)}</span></div>` +
+    (SITE ? button(`${SITE}/admin/patient/${encodeURIComponent(patient.email)}`, 'View & download in admin', '#16201C') : '');
+  await send(
+    practitionerTo,
+    `Report uploaded — ${who}`,
+    `${who} uploaded a report (${fileName}).${SITE ? '\n\nView & download in the admin: ' + SITE + '/admin/patient/' + encodeURIComponent(patient.email) : ''}\n`,
+    shell({ accent: '#4E7A5E', badge: 'Patient report', badgeColor: '#4E7A5E', heading: 'A patient uploaded a report', bodyHtml: body, preheader: `${who} uploaded ${fileName}.` }),
+  );
+}
+
 // --- to Virthy: new request with Accept / Reject ----------------------------
 async function practitionerRequested(b, acceptUrl, rejectUrl) {
   const text =
@@ -307,4 +322,4 @@ async function practitionerRequested(b, acceptUrl, rejectUrl) {
     shell({ accent: '#16201C', badge: 'New request', badgeColor: '#B4562F', heading: 'New booking request', bodyHtml: body, preheader: `${b.name} — ${b.serviceName} on ${prettyWhen(b)}` }));
 }
 
-module.exports = { practitionerRequested, patientRequested, patientConfirmed, patientRejected, patientCancelled, patientRescheduled, patientProposed, patientProposalDeclined, patientSessionDone, patientReminder, patientReceipt, patientRecommendation, passwordReset };
+module.exports = { practitionerRequested, practitionerReport, patientRequested, patientConfirmed, patientRejected, patientCancelled, patientRescheduled, patientProposed, patientProposalDeclined, patientSessionDone, patientReminder, patientReceipt, patientRecommendation, passwordReset };
