@@ -40,6 +40,21 @@
      otherwise it pins and overlaps the booking form. */
   .book-side{position:static}
   @media(min-width:900px){.book-side{position:sticky;top:92px}}
+  /* header nav + mobile drawer */
+  .mainnav{display:flex;align-items:center;flex-wrap:wrap;gap:10px 22px;font-size:13.5px;letter-spacing:0.02em}
+  .menu-btn{display:none;background:none;border:1px solid #C9C2B2;border-radius:8px;padding:6px 11px;font-size:20px;line-height:1;cursor:pointer;color:#16201C}
+  .menu-overlay{display:none}
+  @media(max-width:760px){
+    .menu-btn{display:inline-flex;align-items:center}
+    #mainNav{position:fixed;top:0;right:0;height:100dvh;width:min(80vw,300px);background:#FFFDF8;border-left:1px solid #DCD5C7;flex-direction:column;align-items:stretch;gap:2px;padding:74px 20px 24px;transform:translateX(105%);transition:transform .25s ease;box-shadow:-24px 0 50px -30px rgba(22,32,28,.5);z-index:40;overflow-y:auto}
+    body.menu-open #mainNav{transform:translateX(0)}
+    #mainNav>a{padding:13px 6px;font-size:16px;border-bottom:1px solid #EFEAE0}
+    #mainNav>a[href="#book"]{border-bottom:none;text-align:center;margin-top:10px}
+    #navAuth a{display:block;padding:13px 6px;font-size:16px;border-bottom:1px solid #EFEAE0}
+    .menu-overlay{display:block;position:fixed;inset:0;background:rgba(22,32,28,.45);z-index:39;opacity:0;visibility:hidden;transition:opacity .2s}
+    body.menu-open .menu-overlay{opacity:1;visibility:visible}
+    body.menu-open{overflow:hidden}
+  }
 </style>
 </head>
 <body>
@@ -47,7 +62,8 @@
 
 <header style="position:sticky;top:0;z-index:20;display:flex;align-items:baseline;justify-content:space-between;flex-wrap:wrap;gap:12px 28px;padding:18px 0 14px;background:linear-gradient(#F2EEE6 74%,rgba(242,238,230,0))">
   <a href="#top" class="serif" style="font-size:22px;color:#16201C">Virthy&nbsp;Jain<span style="color:#B4562F">.</span></a>
-  <nav style="display:flex;align-items:center;flex-wrap:wrap;gap:10px 22px;font-size:13.5px;letter-spacing:0.02em">
+  <button class="menu-btn" id="menuBtn" aria-label="Menu" onclick="toggleMenu()">☰</button>
+  <nav id="mainNav" class="mainnav">
     <a href="#practice" style="color:#4A574F">Practice</a>
     <a href="#map" style="color:#4A574F">Where it hurts</a>
     <a href="#experience" style="color:#4A574F">Experience</a>
@@ -56,6 +72,7 @@
     <a href="#book" style="padding:10px 18px;border-radius:999px;background:#16201C;color:#F2EEE6;font-weight:500">Book a session</a>
     <span id="navAuth"></span>
   </nav>
+  <div class="menu-overlay" onclick="toggleMenu()"></div>
 </header>
 
 <section id="top" style="padding:clamp(32px,5vw,56px) 0 clamp(48px,6vw,72px)">
@@ -650,6 +667,8 @@ renderExpertise();
 renderFormats();
 ['f_name','f_email'].forEach(function(id){ el(id).addEventListener('input', updateSummary); });
 el('bookForm').addEventListener('submit', submitBooking);
+window.toggleMenu = function(){ document.body.classList.toggle('menu-open'); };
+el('mainNav').addEventListener('click', function(e){ if(e.target.tagName==='A') document.body.classList.remove('menu-open'); });
 renderAccount();
 loadMe();
 loadServices().then(loadAvailability).catch(function(){
