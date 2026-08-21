@@ -418,18 +418,34 @@ function actAccept(token) { const e = store.findByToken(token); if (!e) return; 
 function actReject(token) { const e = store.findByToken(token); if (!e || e.status === 'rejected') return; const b = store.updateStatus(token, 'rejected'); email.patientRejected(b).catch(() => {}); }
 function actCancel(token) { const e = store.findByToken(token); if (!e || ['cancelled', 'rejected'].includes(e.status)) return; const b = store.updateStatus(token, 'cancelled'); email.patientCancelled(b).catch(() => {}); }
 function actComplete(token) { const e = store.findByToken(token); if (!e) return; const b = store.updateStatus(token, 'completed'); email.patientSessionDone(b).catch(() => {}); }
+// Another active booking overlapping the proposed [startMin,endMin] on `date`,
+// excluding `token`. Includes the inter-appointment buffer.
+function conflictingBooking(token, date, startMin, endMin) {
+  const buffer = config.bufferMinutes || 0;
+  return store.activeBookings().find((o) => {
+    if (o.token === token || o.starts_at.slice(0, 10) !== date) return false;
+    const oS = A.toMin(o.starts_at.slice(11, 16));
+    const oE = A.toMin(o.ends_at.slice(11, 16));
+    return startMin < oE + buffer && oS < endMin + buffer;
+  }) || null;
+}
 function actReschedule(token, local) {
-  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(local || '')) return;
+  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(local || '')) return { error: 'bad_time' };
   const date = local.slice(0, 10), hm = local.slice(11, 16);
   const list = store.readAll();
   const b = list.find((x) => x.token === token);
-  if (!b) return;
+  if (!b) return { error: 'not_found' };
+  const startMin = A.toMin(hm);
+  const endMin = startMin + (b.durationMinutes || 45);
+  const clash = conflictingBooking(token, date, startMin, endMin);
+  if (clash) return { conflict: clash };
   b.starts_at = `${date} ${hm}:00`;
-  b.ends_at = `${date} ${A.toHM(A.toMin(hm) + (b.durationMinutes || 45))}:00`;
+  b.ends_at = `${date} ${A.toHM(endMin)}:00`;
   b.status = 'confirmed';
   b.updated_at = new Date().toISOString();
   store.writeAll(list);
   email.patientRescheduled(b).catch(() => {});
+  return { ok: true };
 }
 
 const ADMIN_CSS = `
@@ -516,8 +532,9 @@ function adminLoginPage(err) {
 function fbtn(token, action, label, cls, confirm) {
   return `<form method="POST" action="/admin/booking/${esc(token)}/${action}"${confirm ? ` onsubmit="return confirm('${label} and email the patient?')"` : ''}><button class="${cls}">${label}</button></form>`;
 }
-function reForm(token) {
-  return `<form method="POST" action="/admin/booking/${esc(token)}/reschedule" style="display:inline-flex;gap:4px;align-items:center"><input type="datetime-local" name="datetime" required><button class="ghost">Change time</button></form>`;
+function reForm(b) {
+  const val = b.starts_at ? b.starts_at.slice(0, 10) + 'T' + b.starts_at.slice(11, 16) : '';
+  return `<form method="POST" action="/admin/booking/${esc(b.token)}/reschedule" style="display:inline-flex;gap:4px;align-items:center"><input type="datetime-local" name="datetime" value="${esc(val)}" required><button class="ghost">Change time</button></form>`;
 }
 function proposeLink(token) {
   return `<a href="/admin/booking/${esc(token)}/propose" style="display:inline-block;background:#fff;border:1px solid #999;color:#16201C;border-radius:8px;padding:8px 14px;font-size:13px;margin:6px 6px 0 0;text-decoration:none">Propose new time</a>`;
@@ -544,7 +561,7 @@ function bookingCard(b) {
     : b.status === 'proposed'
     ? '<span class="muted" style="margin-right:6px">Waiting on patient to accept…</span>' + fbtn(b.token, 'cancel', 'Cancel', 'dark', true) + proposeLink(b.token)
     : b.status === 'confirmed'
-    ? fbtn(b.token, 'complete', 'Session done', 'dark', true) + fbtn(b.token, 'cancel', 'Cancel', 'ghost', true) + reForm(b.token) + '<div>' + paidControl(b) + '</div>'
+    ? fbtn(b.token, 'complete', 'Session done', 'dark', true) + fbtn(b.token, 'cancel', 'Cancel', 'ghost', true) + reForm(b) + '<div>' + paidControl(b) + '</div>'
     : b.status === 'completed' ? paidControl(b) : '';
   const payPill = ['confirmed', 'completed'].includes(b.status)
     ? (b.paid ? `<span class="pill" style="background:#4E7A5E;margin-left:6px">Paid €${esc(b.paidAmount != null ? b.paidAmount : '')}</span>` : '<span class="pill" style="background:#8A9188;margin-left:6px">Unpaid</span>')
@@ -627,7 +644,20 @@ function guard(req, res) { if (!adminAuthed(req)) { res.redirect('/admin'); retu
 app.post('/admin/booking/:token/accept', (req, res) => { if (!guard(req, res)) return; actAccept(req.params.token); res.redirect('/admin'); });
 app.post('/admin/booking/:token/reject', (req, res) => { if (!guard(req, res)) return; actReject(req.params.token); res.redirect('/admin'); });
 app.post('/admin/booking/:token/cancel', (req, res) => { if (!guard(req, res)) return; actCancel(req.params.token); res.redirect('/admin'); });
-app.post('/admin/booking/:token/reschedule', (req, res) => { if (!guard(req, res)) return; actReschedule(req.params.token, (req.body && req.body.datetime) || ''); res.redirect('/admin'); });
+app.post('/admin/booking/:token/reschedule', (req, res) => {
+  if (!guard(req, res)) return;
+  const r = actReschedule(req.params.token, (req.body && req.body.datetime) || '');
+  if (r && r.conflict) {
+    const c = r.conflict;
+    res.type('text/html');
+    return res.send(adminShell('Time clash', backLink('/admin', 'Dashboard') +
+      `<div class="card"><h2 style="margin-top:0;color:#B4562F">Already booked at that time</h2>
+        <p style="font-size:15px">There's already a booking then: <b>${esc(c.name)}</b> — ${esc(c.serviceName)} at ${esc(c.starts_at.slice(0, 16))} <span class="pill" style="background:#4E7A5E">${esc(c.status)}</span></p>
+        <p class="muted">Cancel or delete that booking first, then change this one to that time.</p>
+        <a href="/admin/patient/${encodeURIComponent(c.email)}" style="display:inline-block;margin-top:6px">Open that patient →</a></div>`, 'dashboard'));
+  }
+  res.redirect('/admin');
+});
 app.post('/admin/booking/:token/complete', (req, res) => { if (!guard(req, res)) return; actComplete(req.params.token); res.redirect('/admin'); });
 app.post('/admin/booking/:token/clinical', (req, res) => {
   if (!guard(req, res)) return;
